@@ -15,24 +15,40 @@
  */
 package me.ningpp.abacus.translator;
 
-import me.ningpp.abacus.AbacusParser.ParenthesisExpressionContext;
+import me.ningpp.abacus.AbacusParser.EqualityExpressionContext;
 import me.ningpp.abacus.ExpressionDTO;
 import me.ningpp.abacus.ExpressionType;
 import org.antlr.v4.runtime.tree.ParseTree;
+import org.antlr.v4.runtime.tree.TerminalNode;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-public class ParenthesisTranslator implements Translator {
+public class EqualityExpressionTranslator implements Translator {
 
     @Override
     public ExpressionDTO translate(ParseTree node) {
-        if (!(node instanceof ParenthesisExpressionContext peCtx)) {
+        if (!(node instanceof EqualityExpressionContext eeCtx)) {
             return null;
         }
-        return new ExpressionDTO(node.getText(),
-                ExpressionType.PARENTHESIS,
-                List.of(TranslatorUtil.translate(peCtx.conditionalExpression()))
-        );
+
+        ExpressionDTO dto = new ExpressionDTO();
+        dto.setType(ExpressionType.EQUALITY);
+        dto.setText(node.getText());
+        TerminalNode symbol = eeCtx.EQUAL();
+        if (symbol == null) {
+            symbol = eeCtx.NOTEQUAL();
+        }
+
+        List<ExpressionDTO> children = new ArrayList<>();
+        children.add(TranslatorUtil.translate(eeCtx.equalityExpression()));
+        children.add(TranslatorUtil.translate(symbol));
+        children.add(TranslatorUtil.translate(eeCtx.relationalExpression()));
+
+        dto.setChildren(children.stream().filter(Objects::nonNull).toList());
+
+        return dto;
     }
 
 }

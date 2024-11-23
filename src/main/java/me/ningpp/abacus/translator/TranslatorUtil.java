@@ -50,6 +50,14 @@ public final class TranslatorUtil {
         TRANSLATORS.add(new PrimaryTranslator());
         TRANSLATORS.add(new ArithmeticTranslator());
         TRANSLATORS.add(new ParenthesisTranslator());
+        TRANSLATORS.add(new ConditionalExpressionTranslator());
+        TRANSLATORS.add(new ConditionalConditionTranslator());
+        TRANSLATORS.add(new ConditionalThenTranslator());
+        TRANSLATORS.add(new ConditionalElseTranslator());
+        TRANSLATORS.add(new ConditionalOrExpressionTranslator());
+        TRANSLATORS.add(new ConditionalAndExpressionTranslator());
+        TRANSLATORS.add(new EqualityExpressionTranslator());
+        TRANSLATORS.add(new RelationalExpressionTranslator());
     }
 
     public static ExpressionDTO translate(ParseTree node) {
@@ -82,6 +90,14 @@ public final class TranslatorUtil {
     }
 
     private static final Set<ExpressionType> ROOT_EXPRESSION_TYPES = new HashSet<>(Arrays.asList(
+            ExpressionType.CONDITIONAL,
+            ExpressionType.CONDITIONAL_CONDITION,
+            ExpressionType.CONDITIONAL_THEN,
+            ExpressionType.CONDITIONAL_ELSE,
+            ExpressionType.CONDITIONAL_OR,
+            ExpressionType.CONDITIONAL_AND,
+            ExpressionType.RELATIONAL,
+
             ExpressionType.VARIABLE,
             ExpressionType.NUMBER,
             ExpressionType.SYMBOL

@@ -22,7 +22,14 @@ TILDE:                    '~';
 POW:                      '^';
 OP_AND:                   '&&';
 OP_OR:                    '||';
-
+GT:                       '>';
+LT:                       '<';
+EQUAL:                    '==';
+NOTEQUAL:                 '!=';
+LE:                       '<=';
+GE:                       '>=';
+QUESTION:                 '?';
+COLON:                    ':';
 
 
 VARIABLE: IdentifierStart IdentifierPart*;

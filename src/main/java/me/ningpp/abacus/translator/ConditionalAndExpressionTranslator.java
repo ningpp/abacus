@@ -15,24 +15,34 @@
  */
 package me.ningpp.abacus.translator;
 
-import me.ningpp.abacus.AbacusParser.ParenthesisExpressionContext;
+import me.ningpp.abacus.AbacusParser.ConditionalAndExpressionContext;
 import me.ningpp.abacus.ExpressionDTO;
 import me.ningpp.abacus.ExpressionType;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-public class ParenthesisTranslator implements Translator {
+public class ConditionalAndExpressionTranslator implements Translator {
 
     @Override
     public ExpressionDTO translate(ParseTree node) {
-        if (!(node instanceof ParenthesisExpressionContext peCtx)) {
+        if (!(node instanceof ConditionalAndExpressionContext caeCtx)) {
             return null;
         }
-        return new ExpressionDTO(node.getText(),
-                ExpressionType.PARENTHESIS,
-                List.of(TranslatorUtil.translate(peCtx.conditionalExpression()))
-        );
+
+        ExpressionDTO dto = new ExpressionDTO();
+        dto.setType(ExpressionType.CONDITIONAL_AND);
+        dto.setText(node.getText());
+
+        List<ExpressionDTO> children = new ArrayList<>();
+        children.add(TranslatorUtil.translate(caeCtx.equalityExpression()));
+        children.add(TranslatorUtil.translate(caeCtx.OP_AND()));
+        children.add(TranslatorUtil.translate(caeCtx.conditionalAndExpression()));
+
+        dto.setChildren(children.stream().filter(Objects::nonNull).toList());
+        return dto;
     }
 
 }

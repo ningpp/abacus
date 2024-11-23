@@ -13,22 +13,29 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-package me.ningpp.abacus;
+package me.ningpp.abacus.translator;
 
-import me.ningpp.abacus.AbacusParser.ConditionalExpressionContext;
-import me.ningpp.abacus.translator.TranslatorUtil;
+import me.ningpp.abacus.AbacusParser.ConditionalConditionContext;
+import me.ningpp.abacus.ExpressionDTO;
+import me.ningpp.abacus.ExpressionType;
+import org.antlr.v4.runtime.tree.ParseTree;
 
 import java.util.List;
 
-public class AbacusDefaultVisitor extends AbacusParserBaseVisitor<ExpressionResultDTO> {
+public class ConditionalConditionTranslator implements Translator {
 
     @Override
-    public ExpressionResultDTO visitConditionalExpression(ConditionalExpressionContext ctx) {
-        if (ctx == null || ctx.children == null) {
+    public ExpressionDTO translate(ParseTree node) {
+        if (!(node instanceof ConditionalConditionContext ccCtx)) {
             return null;
         }
-        ExpressionResultDTO dto = new ExpressionResultDTO();
-        dto.setExpressions(List.of(TranslatorUtil.translate(ctx)));
+
+        ExpressionDTO dto = new ExpressionDTO();
+        dto.setType(ExpressionType.CONDITIONAL_CONDITION);
+        dto.setText(node.getText());
+        dto.setChildren(List.of(
+                TranslatorUtil.translate(ccCtx.conditionalOrExpression())
+        ));
         return dto;
     }
 

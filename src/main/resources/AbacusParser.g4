@@ -29,7 +29,7 @@ primaryExpression
     ;
 
 parenthesisExpression
-    : OPEN_PARENS additiveExpression CLOSE_PARENS
+    : OPEN_PARENS conditionalExpression CLOSE_PARENS
     ;
 
 scientific
@@ -40,3 +40,37 @@ variable
     : VARIABLE
     ;
 
+
+conditionalExpression
+    : conditionalOrExpression
+    | conditionalCondition '?' conditionalThen ':' conditionalElse
+    ;
+
+conditionalCondition:     conditionalOrExpression;
+conditionalThen:          conditionalExpression;
+conditionalElse:          conditionalExpression;
+
+
+conditionalOrExpression
+    : conditionalAndExpression
+    | conditionalOrExpression '||' conditionalAndExpression
+    ;
+
+conditionalAndExpression
+    : equalityExpression
+    | conditionalAndExpression '&&' equalityExpression
+    ;
+
+equalityExpression
+    : relationalExpression
+    | equalityExpression '==' relationalExpression
+    | equalityExpression '!=' relationalExpression
+    ;
+
+relationalExpression
+    : additiveExpression
+    | relationalExpression '<' additiveExpression
+    | relationalExpression '>' additiveExpression
+    | relationalExpression '<=' additiveExpression
+    | relationalExpression '>=' additiveExpression
+    ;

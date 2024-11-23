@@ -29,6 +29,20 @@ public enum ExpressionType {
 
     UNARY,
 
+    CONDITIONAL,
+
+    CONDITIONAL_CONDITION,
+    CONDITIONAL_THEN,
+    CONDITIONAL_ELSE,
+
+    CONDITIONAL_OR,
+
+    CONDITIONAL_AND,
+
+    EQUALITY,
+
+    RELATIONAL,
+
     PRIMARY,
 
     ARITHMETIC,
