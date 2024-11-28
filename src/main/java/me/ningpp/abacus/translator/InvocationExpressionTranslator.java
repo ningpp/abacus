@@ -15,27 +15,40 @@
  */
 package me.ningpp.abacus.translator;
 
-import me.ningpp.abacus.AbacusParser.ConditionalThenContext;
+import me.ningpp.abacus.AbacusParser.ArgumentListContext;
+import me.ningpp.abacus.AbacusParser.ExpressionContext;
+import me.ningpp.abacus.AbacusParser.InvocationExpressionContext;
 import me.ningpp.abacus.ExpressionDTO;
 import me.ningpp.abacus.ExpressionType;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
-public class ConditionalThenTranslator implements Translator {
+public class InvocationExpressionTranslator implements Translator {
 
     @Override
     public ExpressionDTO translate(ParseTree node) {
-        if (!(node instanceof ConditionalThenContext ctCtx)) {
+        if (!(node instanceof InvocationExpressionContext ieCtx)) {
             return null;
         }
-
         ExpressionDTO dto = new ExpressionDTO();
-        dto.setType(ExpressionType.CONDITIONAL_THEN);
+        dto.setType(ExpressionType.METHOD_INVOCATION);
         dto.setText(node.getText());
-        dto.setChildren(List.of(
-                TranslatorUtil.translate(ctCtx.expression())
-        ));
+        List<ExpressionDTO> children = new ArrayList<>();
+        children.add(TranslatorUtil.translate(ieCtx.methodName().VARIABLE()));
+        ArgumentListContext argList = ieCtx.argumentList();
+        if (argList != null) {
+            List<ExpressionContext> argExprs = argList.expression();
+            if (argExprs != null) {
+                for (ExpressionContext expCtx : argExprs) {
+                    children.add(TranslatorUtil.translate(expCtx));
+                }
+            }
+        }
+
+        dto.setChildren(children.stream().filter(Objects::nonNull).toList());
         return dto;
     }
 

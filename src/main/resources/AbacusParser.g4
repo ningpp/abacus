@@ -26,10 +26,11 @@ primaryExpression
     : scientific
     | variable
     | parenthesisExpression
+    | invocationExpression
     ;
 
 parenthesisExpression
-    : OPEN_PARENS conditionalExpression CLOSE_PARENS
+    : '(' expression ')'
     ;
 
 scientific
@@ -41,13 +42,29 @@ variable
     ;
 
 
+expression
+    : invocationExpression
+    | conditionalExpression
+    ;
+
+invocationExpression: methodName '(' argumentList? ')';
+
+methodName
+    : VARIABLE
+    ;
+
+argumentList
+    : expression (',' expression)*
+    ;
+
+
 conditionalExpression
     : conditionalOrExpression
     | conditionalCondition '?' conditionalThen ':' conditionalElse
     ;
 
 conditionalCondition:     conditionalOrExpression;
-conditionalThen:          conditionalExpression;
+conditionalThen:          expression;
 conditionalElse:          conditionalExpression;
 
 

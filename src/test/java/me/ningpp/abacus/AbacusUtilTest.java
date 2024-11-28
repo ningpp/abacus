@@ -62,6 +62,7 @@ class AbacusUtilTest {
         }
 
         String expression = generateRandomExpression(depth, 1, expressionParts, random);
+        LOGGER.info("generateRandomExpression length:\t\t{}\t\t{}", expression.length(), expression);
         boolean resultEqual = false;
         BigDecimal abacusResult = null;
         BigDecimal qlResult = null;
@@ -90,7 +91,8 @@ class AbacusUtilTest {
         int qlScale = 10;
         RoundingMode qlRoundingMode = RoundingMode.HALF_UP;
 
-        BigDecimal abacusResult = AbacusUtil.calculate(AbacusUtil.parse(expression), context, qlScale, qlRoundingMode);
+        List<ExpressionDTO> exps = CollapseUtil.collapse(AbacusUtil.parse(expression).getExpressions());
+        BigDecimal abacusResult = AbacusUtil.calculateCollapse(exps, context, qlScale, qlRoundingMode);
 
         DefaultContext<String, Object> qlContext = new DefaultContext<>();
         qlContext.putAll(context);
@@ -114,6 +116,23 @@ class AbacusUtilTest {
                 }
             }
             return builder.toString();
+        }
+
+        boolean useMethodInvocation = random.nextInt(101) < 8;
+        if (useMethodInvocation) {
+            int paramCount = 2 + random.nextInt(0, 3);
+            String methodName;
+            if (random.nextBoolean()) {
+                methodName = "max";
+            } else {
+                methodName = "min";
+            }
+            List<String> params = new ArrayList<>(paramCount);
+            for (int i = 0; i < paramCount; i++) {
+                params.add(generateRandomExpression(depth - 1, currentDepth + 1, parts, random));
+            }
+            return String.format(Locale.ROOT,
+                    " %s( %s ) ", methodName, String.join(", ", params));
         }
 
         boolean useConditional = random.nextInt(101) < 8;
@@ -220,6 +239,50 @@ class AbacusUtilTest {
                     assertTrue(resultEqual);
                 }
             }
+        }
+    }
+
+    @Test
+    void methodComplexTest() throws Exception {
+        String expression = " ( 1 + min(a, 1) ) < (b - 5)  ?  c * d :  ( f > g ? e * min(f, g) + max(f, g) : e / max(f, g) - min(f, g) ) ";
+        for (int i = -1; i < 9; i++) {
+            Map<String, BigDecimal> context = new LinkedHashMap<>();
+            context.put("a", BigDecimal.valueOf( i ));
+            context.put("b", BigDecimal.valueOf(7));
+            context.put("c", BigDecimal.valueOf(11));
+            context.put("d", BigDecimal.valueOf(13));
+            context.put("e", BigDecimal.valueOf(17));
+            context.put("f", BigDecimal.valueOf(new Random().nextDouble()));
+            context.put("g", BigDecimal.valueOf(new Random().nextDouble()));
+
+            Pair<BigDecimal, Object> pair = calculate(expression, context);
+            BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
+            boolean resultEqual = right.equals(pair.getLeft());
+            if (!resultEqual) {
+                LOGGER.info("expression:\t{}", expression);
+            }
+            assertTrue(resultEqual);
+        }
+    }
+
+    @Test
+    void methodTest() throws Exception {
+        List<String> expressions = List.of(
+                "max(1, 2)",
+                "max(1, max(2, 3))",
+                "max(max(1, 2), 3)",
+                "max(max(1, 2), max(3, 4))",
+                "max(1, max(2, max(3, 4)))",
+                "max(max(1, 2), max(3, max(4, max(5, 6))))"
+        );
+        for (String expression : expressions) {
+            Pair<BigDecimal, Object> pair = calculate(expression, Map.of());
+            BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
+            boolean resultEqual = right.equals(pair.getLeft());
+            if (!resultEqual) {
+                LOGGER.info("expression:\t{}", expression);
+            }
+            assertTrue(resultEqual);
         }
     }
 

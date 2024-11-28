@@ -15,6 +15,11 @@
  */
 package me.ningpp.abacus;
 
+import me.ningpp.abacus.exception.MethodNotFoundException;
+import me.ningpp.abacus.exception.SyntaxException;
+import me.ningpp.abacus.methods.AbacusMethod;
+import me.ningpp.abacus.methods.MaxMethod;
+import me.ningpp.abacus.methods.MinMethod;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.apache.commons.collections4.CollectionUtils;
@@ -22,6 +27,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,13 +36,20 @@ public final class AbacusUtil {
     private AbacusUtil() {
     }
 
+    private static final Map<String, AbacusMethod> METHODS = new HashMap<>();
+
+    static {
+        METHODS.put("max", new MaxMethod());
+        METHODS.put("min", new MinMethod());
+    }
+
     public static ExpressionResultDTO parse(String inputExpression) {
         AbacusLexer lexer = new AbacusLexer(CharStreams.fromString(inputExpression));
         AbacusParser parser = new AbacusParser(new CommonTokenStream(lexer));
         parser.removeErrorListeners();
         parser.addErrorListener(new SyntaxErrorListener());
         AbacusDefaultVisitor visitor = new AbacusDefaultVisitor();
-        return visitor.visit(parser.conditionalExpression());
+        return visitor.visit(parser.expression());
     }
 
     public static BigDecimal calculate(ExpressionResultDTO resultDto, Map<String, BigDecimal> context,
@@ -170,6 +183,9 @@ public final class AbacusUtil {
     private static void calculate(List<ExpressionDTO> exps, Map<String, BigDecimal> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         for (ExpressionDTO exp : exps) {
+            if (ExpressionType.METHOD_INVOCATION == exp.getType()) {
+                int a = 1;
+            }
             if (exp.isCalculated()) {
                 continue;
             }
@@ -237,6 +253,22 @@ public final class AbacusUtil {
                         throw new IllegalStateException();
                     }
                     exp.setCalculatedValue(result);
+                } else if (exp.getType() == ExpressionType.METHOD_INVOCATION) {
+                    String methodName = exp.getChildren().get(0).getText();
+                    AbacusMethod abacusMethod = METHODS.get(methodName);
+                    if (abacusMethod == null) {
+                        throw new MethodNotFoundException("should register method before use it, method name is " + methodName);
+                    }
+                    Object[] args = null;
+                    int childCount = exp.getChildren().size();
+                    int argCount = exp.getChildren().size() - 1;
+                    if (argCount > 0) {
+                        args = new Object[argCount];
+                        for (int i = 1; i < childCount; i++) {
+                            args[i-1] = exp.getChildren().get(i).getCalculatedValue();
+                        }
+                    }
+                    exp.setCalculatedValue((BigDecimal) abacusMethod.execute(args));
                 }
 
                 exp.setCalculated(true);

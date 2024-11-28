@@ -15,16 +15,10 @@
  */
 package me.ningpp.abacus.translator;
 
-import me.ningpp.abacus.AbacusParser.MultiplicativeExpressionContext;
-import me.ningpp.abacus.AbacusParser.PrimaryExpressionContext;
-import me.ningpp.abacus.AbacusParser.ScientificContext;
-import me.ningpp.abacus.AbacusParser.UnaryExpressionContext;
-import me.ningpp.abacus.AbacusParser.VariableContext;
 import me.ningpp.abacus.ExpressionDTO;
 import me.ningpp.abacus.ExpressionType;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.tuple.Pair;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,6 +52,8 @@ public final class TranslatorUtil {
         TRANSLATORS.add(new ConditionalAndExpressionTranslator());
         TRANSLATORS.add(new EqualityExpressionTranslator());
         TRANSLATORS.add(new RelationalExpressionTranslator());
+        TRANSLATORS.add(new ExpressionTranslator());
+        TRANSLATORS.add(new InvocationExpressionTranslator());
     }
 
     public static ExpressionDTO translate(ParseTree node) {
@@ -76,8 +72,8 @@ public final class TranslatorUtil {
             throw new IllegalStateException(node.getText() + "\t\t\t" + node.getClass().getSimpleName());
         }
 
-        if (CollectionUtils.isEmpty(result.getChildren())
-                && !ROOT_EXPRESSION_TYPES.contains(result.getType())) {
+        if (!ROOT_EXPRESSION_TYPES.contains(result.getType())
+                && CollectionUtils.isEmpty(result.getChildren())) {
             int childCount = node.getChildCount();
             List<ExpressionDTO> children = new ArrayList<>(childCount);
             result.setChildren(children);
@@ -90,6 +86,7 @@ public final class TranslatorUtil {
     }
 
     private static final Set<ExpressionType> ROOT_EXPRESSION_TYPES = new HashSet<>(Arrays.asList(
+            ExpressionType.METHOD_INVOCATION,
             ExpressionType.CONDITIONAL,
             ExpressionType.CONDITIONAL_CONDITION,
             ExpressionType.CONDITIONAL_THEN,
@@ -102,42 +99,5 @@ public final class TranslatorUtil {
             ExpressionType.NUMBER,
             ExpressionType.SYMBOL
     ));
-
-    public static Pair<ScientificContext, VariableContext> onlyContainScientificAndVariable(ParseTree parseTree) {
-        if (parseTree instanceof MultiplicativeExpressionContext) {
-            return onlyContainScientificAndVariable((MultiplicativeExpressionContext) parseTree);
-        } else if (parseTree instanceof UnaryExpressionContext) {
-            return onlyContainScientificAndVariable((UnaryExpressionContext) parseTree);
-        } else if (parseTree instanceof PrimaryExpressionContext) {
-            return onlyContainScientificAndVariable((PrimaryExpressionContext) parseTree);
-        } else {
-            return null;
-        }
-    }
-
-    private static Pair<ScientificContext, VariableContext> onlyContainScientificAndVariable(MultiplicativeExpressionContext meCtx) {
-        if (meCtx == null || meCtx.children == null || meCtx.getChildCount() > 1) {
-            return null;
-        } else {
-            return onlyContainScientificAndVariable((UnaryExpressionContext) meCtx.children.get(0));
-        }
-    }
-
-    private static Pair<ScientificContext, VariableContext> onlyContainScientificAndVariable(UnaryExpressionContext ueCtx) {
-        if (ueCtx == null) {
-            return null;
-        } else {
-            return onlyContainScientificAndVariable(ueCtx.primaryExpression());
-        }
-    }
-
-    private static Pair<ScientificContext, VariableContext> onlyContainScientificAndVariable(PrimaryExpressionContext peCtx) {
-        if (peCtx != null && peCtx.parenthesisExpression() == null) {
-            if (peCtx.scientific() != null || peCtx.variable() != null) {
-                return Pair.of(peCtx.scientific(), peCtx.variable());
-            }
-        }
-        return null;
-    }
 
 }

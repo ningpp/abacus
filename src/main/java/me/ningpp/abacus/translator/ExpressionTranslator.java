@@ -13,16 +13,21 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-package me.ningpp.abacus;
+package me.ningpp.abacus.translator;
 
-public class SyntaxException extends RuntimeException {
+import me.ningpp.abacus.AbacusParser.ExpressionContext;
+import me.ningpp.abacus.ExpressionDTO;
+import me.ningpp.abacus.ExpressionType;
+import org.antlr.v4.runtime.tree.ParseTree;
 
-    public SyntaxException(String message) {
-        super(message);
-    }
+public class ExpressionTranslator implements Translator {
 
-    public SyntaxException(String message, Throwable cause) {
-        super(message, cause);
+    @Override
+    public ExpressionDTO translate(ParseTree node) {
+        if (!(node instanceof ExpressionContext)) {
+            return null;
+        }
+        return new ExpressionDTO(node.getText(), ExpressionType.EXPRESSION);
     }
 
 }

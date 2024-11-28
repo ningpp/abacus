@@ -13,43 +13,10 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-package me.ningpp.abacus;
+package me.ningpp.abacus.methods;
 
-public enum ExpressionType {
+public interface AbacusMethod {
 
-    SYMBOL,
+    Object execute(Object[] args);
 
-    VARIABLE,
-
-    NUMBER,
-
-    PARENTHESIS,
-
-    ADDITIVE,
-
-    UNARY,
-
-    EXPRESSION,
-
-    METHOD_INVOCATION,
-
-    CONDITIONAL,
-
-    CONDITIONAL_CONDITION,
-    CONDITIONAL_THEN,
-    CONDITIONAL_ELSE,
-
-    CONDITIONAL_OR,
-
-    CONDITIONAL_AND,
-
-    EQUALITY,
-
-    RELATIONAL,
-
-    PRIMARY,
-
-    ARITHMETIC,
-
-    MULTIPLICATIVE
 }

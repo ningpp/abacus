@@ -13,43 +13,12 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-package me.ningpp.abacus;
+package me.ningpp.abacus.exception;
 
-public enum ExpressionType {
+public class MethodNotFoundException extends RuntimeException {
 
-    SYMBOL,
+    public MethodNotFoundException(String message) {
+        super(message);
+    }
 
-    VARIABLE,
-
-    NUMBER,
-
-    PARENTHESIS,
-
-    ADDITIVE,
-
-    UNARY,
-
-    EXPRESSION,
-
-    METHOD_INVOCATION,
-
-    CONDITIONAL,
-
-    CONDITIONAL_CONDITION,
-    CONDITIONAL_THEN,
-    CONDITIONAL_ELSE,
-
-    CONDITIONAL_OR,
-
-    CONDITIONAL_AND,
-
-    EQUALITY,
-
-    RELATIONAL,
-
-    PRIMARY,
-
-    ARITHMETIC,
-
-    MULTIPLICATIVE
 }

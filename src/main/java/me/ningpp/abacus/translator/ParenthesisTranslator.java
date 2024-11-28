@@ -31,7 +31,7 @@ public class ParenthesisTranslator implements Translator {
         }
         return new ExpressionDTO(node.getText(),
                 ExpressionType.PARENTHESIS,
-                List.of(TranslatorUtil.translate(peCtx.conditionalExpression()))
+                List.of(TranslatorUtil.translate(peCtx.expression()))
         );
     }
 

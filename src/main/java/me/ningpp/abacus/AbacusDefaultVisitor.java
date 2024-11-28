@@ -15,7 +15,7 @@
  */
 package me.ningpp.abacus;
 
-import me.ningpp.abacus.AbacusParser.ConditionalExpressionContext;
+import me.ningpp.abacus.AbacusParser.ExpressionContext;
 import me.ningpp.abacus.translator.TranslatorUtil;
 
 import java.util.List;
@@ -23,7 +23,7 @@ import java.util.List;
 public class AbacusDefaultVisitor extends AbacusParserBaseVisitor<ExpressionResultDTO> {
 
     @Override
-    public ExpressionResultDTO visitConditionalExpression(ConditionalExpressionContext ctx) {
+    public ExpressionResultDTO visitExpression(ExpressionContext ctx) {
         if (ctx == null || ctx.children == null) {
             return null;
         }
