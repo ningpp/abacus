@@ -44,14 +44,14 @@ class AbacusUtilTest {
 
     private static final List<String> CONDITIONS = List.of("<", "<=", ">", ">=", "==", "!=");
 
-    @RepeatedTest(99)
+    @RepeatedTest(199)
     void randomCalculateTest() {
         Random random = new Random();
         int terms = random.nextInt(1, 32);
         int variableCount = random.nextInt(0, terms + 1);
         int depth = random.nextInt(0, 11);
 
-        Map<String, BigDecimal> context = new LinkedHashMap<>();
+        Map<String, Object> context = new LinkedHashMap<>();
         for (int i = 0; i < variableCount; i++) {
             context.put("$" + (i+1), randomValue(random));
         }
@@ -64,10 +64,10 @@ class AbacusUtilTest {
         String expression = generateRandomExpression(depth, 1, expressionParts, random);
         LOGGER.info("generateRandomExpression length:\t\t{}\t\t{}", expression.length(), expression);
         boolean resultEqual = false;
-        BigDecimal abacusResult = null;
-        BigDecimal qlResult = null;
+        Object abacusResult = null;
+        Object qlResult = null;
         try {
-            Pair<BigDecimal, Object> result = calculate(expression, context);
+            Pair<Object, Object> result = calculate(expression, context);
             qlResult = result.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(result.getRight().toString());
             abacusResult = result.getLeft();
             resultEqual = qlResult.equals(abacusResult);
@@ -87,12 +87,12 @@ class AbacusUtilTest {
         assertTrue(resultEqual);
     }
 
-    private Pair<BigDecimal, Object> calculate(String expression, Map<String, BigDecimal> context) throws Exception {
+    private Pair<Object, Object> calculate(String expression, Map<String, Object> context) throws Exception {
         int qlScale = 10;
         RoundingMode qlRoundingMode = RoundingMode.HALF_UP;
 
         List<ExpressionDTO> exps = CollapseUtil.collapse(AbacusUtil.parse(expression).getExpressions());
-        BigDecimal abacusResult = AbacusUtil.calculateCollapse(exps, context, qlScale, qlRoundingMode);
+        Object abacusResult = AbacusUtil.calculateCollapse(exps, context, qlScale, qlRoundingMode);
 
         DefaultContext<String, Object> qlContext = new DefaultContext<>();
         qlContext.putAll(context);
@@ -187,7 +187,7 @@ class AbacusUtilTest {
 
     @Test
     void calculateTest() throws Exception {
-        Map<String, BigDecimal> context = new LinkedHashMap<>();
+        Map<String, Object> context = new LinkedHashMap<>();
         context.put("$1", BigDecimal.valueOf(1));
         context.put("$2", BigDecimal.valueOf(2));
         context.put("$3", BigDecimal.valueOf(3));
@@ -199,7 +199,7 @@ class AbacusUtilTest {
         int qlScale = 10;
         RoundingMode qlRoundingMode = RoundingMode.HALF_UP;
 
-        BigDecimal abacusResult = AbacusUtil.calculate(AbacusUtil.parse(expression), context, qlScale, qlRoundingMode);
+        Object abacusResult = AbacusUtil.calculate(AbacusUtil.parse(expression), context, qlScale, qlRoundingMode);
 
         DefaultContext<String, Object> qlContext = new DefaultContext<>();
         qlContext.putAll(context);
@@ -223,13 +223,13 @@ class AbacusUtilTest {
         for (String expression : expressions) {
             for (int i = 1; i < 5; i++) {
                 for (int j = 1; j < 5; j++) {
-                    Map<String, BigDecimal> context = new LinkedHashMap<>();
+                    Map<String, Object> context = new LinkedHashMap<>();
                     context.put("$1", BigDecimal.valueOf(i));
                     context.put("$2", BigDecimal.valueOf(j));
                     context.put("$3", BigDecimal.valueOf(3));
                     context.put("$4", BigDecimal.valueOf(7));
 
-                    Pair<BigDecimal, Object> pair = calculate(expression, context);
+                    Pair<Object, Object> pair = calculate(expression, context);
                     BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
                     boolean resultEqual = right.equals(pair.getLeft());
                     if (!resultEqual) {
@@ -246,7 +246,7 @@ class AbacusUtilTest {
     void methodComplexTest() throws Exception {
         String expression = " ( 1 + min(a, 1) ) < (b - 5)  ?  c * d :  ( f > g ? e * min(f, g) + max(f, g) : e / max(f, g) - min(f, g) ) ";
         for (int i = -1; i < 9; i++) {
-            Map<String, BigDecimal> context = new LinkedHashMap<>();
+            Map<String, Object> context = new LinkedHashMap<>();
             context.put("a", BigDecimal.valueOf( i ));
             context.put("b", BigDecimal.valueOf(7));
             context.put("c", BigDecimal.valueOf(11));
@@ -255,7 +255,7 @@ class AbacusUtilTest {
             context.put("f", BigDecimal.valueOf(new Random().nextDouble()));
             context.put("g", BigDecimal.valueOf(new Random().nextDouble()));
 
-            Pair<BigDecimal, Object> pair = calculate(expression, context);
+            Pair<Object, Object> pair = calculate(expression, context);
             BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
             boolean resultEqual = right.equals(pair.getLeft());
             if (!resultEqual) {
@@ -276,7 +276,7 @@ class AbacusUtilTest {
                 "max(max(1, 2), max(3, max(4, max(5, 6))))"
         );
         for (String expression : expressions) {
-            Pair<BigDecimal, Object> pair = calculate(expression, Map.of());
+            Pair<Object, Object> pair = calculate(expression, Map.of());
             BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
             boolean resultEqual = right.equals(pair.getLeft());
             if (!resultEqual) {

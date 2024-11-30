@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public final class AbacusUtil {
 
@@ -52,7 +53,7 @@ public final class AbacusUtil {
         return visitor.visit(parser.expression());
     }
 
-    public static BigDecimal calculate(ExpressionResultDTO resultDto, Map<String, BigDecimal> context,
+    public static Object calculate(ExpressionResultDTO resultDto, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         if (resultDto == null) {
             return null;
@@ -61,7 +62,7 @@ public final class AbacusUtil {
         return calculateCollapse(exps, context, defaultScale, defaultRoundingMode);
     }
 
-    public static BigDecimal calculateCollapse(List<ExpressionDTO> exps, Map<String, BigDecimal> context,
+    public static Object calculateCollapse(List<ExpressionDTO> exps, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         if (CollectionUtils.isEmpty(exps)) {
             return null;
@@ -80,7 +81,7 @@ public final class AbacusUtil {
         return root.getCalculatedValue();
     }
 
-    private static boolean calculateCondition(ExpressionDTO conditionExpr, Map<String, BigDecimal> context,
+    private static Object calculateCondition(ExpressionDTO conditionExpr, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         if (conditionExpr.getType() == ExpressionType.RELATIONAL) {
             return calculateRelational(conditionExpr, context, defaultScale, defaultRoundingMode);
@@ -95,7 +96,7 @@ public final class AbacusUtil {
         return calculateConditionalOr(conditionExpr, context, defaultScale, defaultRoundingMode);
     }
 
-    private static boolean calculateRelational(ExpressionDTO relationalExpr, Map<String, BigDecimal> context,
+    private static boolean calculateRelational(ExpressionDTO relationalExpr, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         if (relationalExpr.getChildren().size() == 1) {
             throw new IllegalStateException(relationalExpr.getText());
@@ -105,23 +106,28 @@ public final class AbacusUtil {
             ExpressionDTO rightExpr = relationalExpr.getChildren().get(2);
             calculate(List.of(leftExpr), context, defaultScale, defaultRoundingMode);
             calculate(List.of(rightExpr), context, defaultScale, defaultRoundingMode);
-            BigDecimal left = leftExpr.getCalculatedValue();
-            BigDecimal right = rightExpr.getCalculatedValue();
-            if ("<".equals(symbol)) {
-                return left.compareTo(right) < 0;
-            } else if (">".equals(symbol)) {
-                return left.compareTo(right) > 0;
-            } else if ("<=".equals(symbol)) {
-                return left.compareTo(right) <= 0;
-            } else if (">=".equals(symbol)) {
-                return left.compareTo(right) >= 0;
+            Object left = leftExpr.getCalculatedValue();
+            Object right = rightExpr.getCalculatedValue();
+            if (left instanceof Comparable leftNumber && right instanceof Comparable rightNumber) {
+                int r = leftNumber.compareTo(rightNumber);
+                if ("<".equals(symbol)) {
+                    return r < 0;
+                } else if (">".equals(symbol)) {
+                    return r > 0;
+                } else if ("<=".equals(symbol)) {
+                    return r <= 0;
+                } else if (">=".equals(symbol)) {
+                    return r >= 0;
+                } else {
+                    throw new IllegalStateException(relationalExpr.getText());
+                }
             } else {
-                throw new IllegalStateException(relationalExpr.getText());
+                throw new IllegalArgumentException("can't compare these two value, left " + left + ", right = " + right);
             }
         }
     }
 
-    private static boolean calculateEquality(ExpressionDTO equalityAndExpr, Map<String, BigDecimal> context,
+    private static boolean calculateEquality(ExpressionDTO equalityAndExpr, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         if (equalityAndExpr.getChildren().size() == 1) {
             return calculateRelational(equalityAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
@@ -130,17 +136,17 @@ public final class AbacusUtil {
             ExpressionDTO rightExpr = equalityAndExpr.getChildren().get(2);
             calculate(List.of(leftExpr), context, defaultScale, defaultRoundingMode);
             calculate(List.of(rightExpr), context, defaultScale, defaultRoundingMode);
-            BigDecimal left = leftExpr.getCalculatedValue();
-            BigDecimal right = rightExpr.getCalculatedValue();
+            Object left = leftExpr.getCalculatedValue();
+            Object right = rightExpr.getCalculatedValue();
             if ("==".equals(equalityAndExpr.getChildren().get(1).getText())) {
-                return left.compareTo(right) == 0;
+                return Objects.equals(left, right);
             } else {
-                return left.compareTo(right) != 0;
+                return ! Objects.equals(left, right);
             }
         }
     }
 
-    private static boolean calculateConditionalAnd(ExpressionDTO conditionalAndExpr, Map<String, BigDecimal> context,
+    private static Object calculateConditionalAnd(ExpressionDTO conditionalAndExpr, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
 
         if (conditionalAndExpr.getType() == ExpressionType.RELATIONAL) {
@@ -157,12 +163,16 @@ public final class AbacusUtil {
         if (conditionalAndExpr.getChildren().size() == 1) {
             return calculateEquality(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
         } else {
-            return calculateConditionalAnd(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode)
-                    && calculateConditionalAnd(conditionalAndExpr.getChildren().get(2), context, defaultScale, defaultRoundingMode);
+            Object left = calculateConditionalAnd(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
+            Object right = calculateConditionalAnd(conditionalAndExpr.getChildren().get(2), context, defaultScale, defaultRoundingMode);
+            if (left instanceof Boolean leftBoolean && right instanceof Boolean rightBoolean) {
+                return leftBoolean && rightBoolean;
+            }
+            throw new IllegalArgumentException("left or right value must be Boolean value, but left = " + left + ", right = " + right);
         }
     }
 
-    private static boolean calculateConditionalOr(ExpressionDTO conditionalOrExpr, Map<String, BigDecimal> context,
+    private static Object calculateConditionalOr(ExpressionDTO conditionalOrExpr, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         if (conditionalOrExpr.getType() == ExpressionType.EQUALITY) {
             return calculateEquality(conditionalOrExpr, context, defaultScale, defaultRoundingMode);
@@ -175,33 +185,38 @@ public final class AbacusUtil {
         if (conditionalOrExpr.getChildren().size() == 1) {
             return calculateConditionalAnd(conditionalOrExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
         } else {
-            return calculateConditionalAnd(conditionalOrExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode)
-                    || calculateConditionalOr(conditionalOrExpr.getChildren().get(2), context, defaultScale, defaultRoundingMode);
+            Object left = calculateConditionalAnd(conditionalOrExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
+            Object right = calculateConditionalOr(conditionalOrExpr.getChildren().get(2), context, defaultScale, defaultRoundingMode);
+            if (left instanceof Boolean leftBoolean && right instanceof Boolean rightBoolean) {
+                return leftBoolean || rightBoolean;
+            }
+            throw new IllegalArgumentException("left or right value must be Boolean value, but left = " + left + ", right = " + right);
         }
     }
 
-    private static void calculate(List<ExpressionDTO> exps, Map<String, BigDecimal> context,
+    private static void calculate(List<ExpressionDTO> exps, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode) {
         for (ExpressionDTO exp : exps) {
-            if (ExpressionType.METHOD_INVOCATION == exp.getType()) {
-                int a = 1;
-            }
             if (exp.isCalculated()) {
                 continue;
             }
 
             if (exp.getType() == ExpressionType.CONDITIONAL) {
-                boolean condition = calculateCondition(exp.getChildren().get(0), context, defaultScale, defaultRoundingMode);
-                if (condition) {
-                    // then expr
-                    ExpressionDTO thenExpr = exp.getChildren().get(1);
-                    calculate(List.of(thenExpr), context, defaultScale, defaultRoundingMode);
-                    exp.setCalculatedValue(thenExpr.getCalculatedValue());
+                Object conditionObject = calculateCondition(exp.getChildren().get(0), context, defaultScale, defaultRoundingMode);
+                if (conditionObject instanceof Boolean condition) {
+                    if (condition) {
+                        // then expr
+                        ExpressionDTO thenExpr = exp.getChildren().get(1);
+                        calculate(List.of(thenExpr), context, defaultScale, defaultRoundingMode);
+                        exp.setCalculatedValue(thenExpr.getCalculatedValue());
+                    } else {
+                        // else expr
+                        ExpressionDTO elseExpr = exp.getChildren().get(2);
+                        calculate(List.of(elseExpr), context, defaultScale, defaultRoundingMode);
+                        exp.setCalculatedValue(elseExpr.getCalculatedValue());
+                    }
                 } else {
-                    // else expr
-                    ExpressionDTO elseExpr = exp.getChildren().get(2);
-                    calculate(List.of(elseExpr), context, defaultScale, defaultRoundingMode);
-                    exp.setCalculatedValue(elseExpr.getCalculatedValue());
+                    throw new IllegalArgumentException("value must be Boolean value, but " + conditionObject + ", expression = " + exp.getText());
                 }
                 exp.setCalculated(true);
                 continue;
@@ -211,23 +226,14 @@ public final class AbacusUtil {
                 calculate(exp.getChildren(), context, defaultScale, defaultRoundingMode);
 
                 if (exp.getType() == ExpressionType.MULTIPLICATIVE || exp.getType() == ExpressionType.ADDITIVE) {
-                    BigDecimal result = exp.getChildren().get(0).getCalculatedValue();
+                    Object result = exp.getChildren().get(0).getCalculatedValue();
                     if (exp.getChildren().size() > 1) {
                         String preSymbol = exp.getChildren().get(1).getText();
                         for (int i = 2; i < exp.getChildren().size(); i++) {
-                            BigDecimal v = exp.getChildren().get(i).getCalculatedValue();
+                            Object v = exp.getChildren().get(i).getCalculatedValue();
                             if (v != null) {
-                                if ("*".equals(preSymbol)) {
-                                    result = result.multiply(v);
-                                } else if ("/".equals(preSymbol)) {
-                                    result = result.divide(v, defaultScale, defaultRoundingMode);
-                                } else if ("+".equals(preSymbol)) {
-                                    result = result.add(v);
-                                } else if ("-".equals(preSymbol)) {
-                                    result = result.subtract(v);
-                                } else {
-                                    throw new IllegalStateException();
-                                }
+                                result = calculateNumber(result, preSymbol, v,
+                                        defaultScale, defaultRoundingMode);
                             }
                             if (exp.getChildren().get(i).getType() == ExpressionType.SYMBOL) {
                                 preSymbol = exp.getChildren().get(i).getText();
@@ -240,18 +246,11 @@ public final class AbacusUtil {
                     exp.setCalculatedValue(exp.getChildren().get(0).getCalculatedValue());
                 } else if (exp.getType() == ExpressionType.ARITHMETIC) {
                     String preSymbol = exp.getChildren().get(0).getText();
-                    BigDecimal result;
-                    if ("*".equals(preSymbol)) {
-                        result = exp.getChildren().get(1).getCalculatedValue();
-                    } else if ("/".equals(preSymbol)) {
-                        result = BigDecimal.ONE.divide(exp.getChildren().get(1).getCalculatedValue(), defaultScale, defaultRoundingMode);
-                    } else if ("+".equals(preSymbol)) {
-                        result = exp.getChildren().get(1).getCalculatedValue();
-                    } else if ("-".equals(preSymbol)) {
-                        result = BigDecimal.ZERO.subtract(exp.getChildren().get(1).getCalculatedValue());
-                    } else {
-                        throw new IllegalStateException();
-                    }
+                    boolean additiveSymbol = "+".equals(preSymbol) || "-".equals(preSymbol);
+                    BigDecimal result = calculateNumber(additiveSymbol ? BigDecimal.ZERO : BigDecimal.ONE,
+                            preSymbol,
+                            exp.getChildren().get(1).getCalculatedValue(),
+                            defaultScale, defaultRoundingMode);
                     exp.setCalculatedValue(result);
                 } else if (exp.getType() == ExpressionType.METHOD_INVOCATION) {
                     String methodName = exp.getChildren().get(0).getText();
@@ -268,7 +267,7 @@ public final class AbacusUtil {
                             args[i-1] = exp.getChildren().get(i).getCalculatedValue();
                         }
                     }
-                    exp.setCalculatedValue((BigDecimal) abacusMethod.execute(args));
+                    exp.setCalculatedValue(abacusMethod.execute(args));
                 }
 
                 exp.setCalculated(true);
@@ -281,6 +280,45 @@ public final class AbacusUtil {
                 exp.setCalculated(true);
             }
         }
+    }
+
+    private static BigDecimal toDecimal(Object left) {
+        if (left instanceof BigDecimal r) {
+            return r;
+        } else if (left instanceof Number n) {
+            return new BigDecimal(n.toString());
+        } else if (left instanceof CharSequence c) {
+            return new BigDecimal(c.toString());
+        } else {
+            throw new IllegalArgumentException("illegal value, expect BigDecimal but " + left.getClass().getName());
+        }
+    }
+
+    private static BigDecimal calculateNumber(Object left, String preSymbol, Object right,
+            int defaultScale, RoundingMode defaultRoundingMode) {
+        if (left == null) {
+            throw new IllegalArgumentException("'left' value can't be null!");
+        }
+        if (right == null) {
+            throw new IllegalArgumentException("'right' value can't be null!");
+        }
+
+        BigDecimal leftDecimal = toDecimal(left);
+        BigDecimal rightDecimal = toDecimal(right);
+
+        BigDecimal result;
+        if ("*".equals(preSymbol)) {
+            result = leftDecimal.multiply(rightDecimal);
+        } else if ("/".equals(preSymbol)) {
+            result = leftDecimal.divide(rightDecimal, defaultScale, defaultRoundingMode);
+        } else if ("+".equals(preSymbol)) {
+            result = leftDecimal.add(rightDecimal);
+        } else if ("-".equals(preSymbol)) {
+            result = leftDecimal.subtract(rightDecimal);
+        } else {
+            throw new IllegalStateException("unsupport Symbol " + preSymbol);
+        }
+        return result;
     }
 
     private static boolean hasNotCalculated(List<ExpressionDTO> horizontals) {

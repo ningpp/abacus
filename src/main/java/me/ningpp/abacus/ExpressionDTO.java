@@ -15,12 +15,11 @@
  */
 package me.ningpp.abacus;
 
-import java.math.BigDecimal;
 import java.util.List;
 
 public class ExpressionDTO {
     private boolean calculated;
-    private BigDecimal calculatedValue;
+    private Object calculatedValue;
     private String text;
     private ExpressionType type;
     private List<ExpressionDTO> children;
@@ -46,11 +45,11 @@ public class ExpressionDTO {
         this.calculated = calculated;
     }
 
-    public BigDecimal getCalculatedValue() {
+    public Object getCalculatedValue() {
         return calculatedValue;
     }
 
-    public void setCalculatedValue(BigDecimal calculatedValue) {
+    public void setCalculatedValue(Object calculatedValue) {
         this.calculatedValue = calculatedValue;
     }
 
