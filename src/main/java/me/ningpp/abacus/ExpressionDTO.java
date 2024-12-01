@@ -18,7 +18,6 @@ package me.ningpp.abacus;
 import java.util.List;
 
 public class ExpressionDTO {
-    private boolean calculated;
     private Object calculatedValue;
     private String text;
     private ExpressionType type;
@@ -32,17 +31,14 @@ public class ExpressionDTO {
     }
 
     public ExpressionDTO(String text, ExpressionType type, List<ExpressionDTO> children) {
+        this(null, text, type, children);
+    }
+
+    public ExpressionDTO(Object calculatedValue, String text, ExpressionType type, List<ExpressionDTO> children) {
+        this.calculatedValue = calculatedValue;
         this.text = text;
         this.type = type;
         this.children = children;
-    }
-
-    public boolean isCalculated() {
-        return calculated;
-    }
-
-    public void setCalculated(boolean calculated) {
-        this.calculated = calculated;
     }
 
     public Object getCalculatedValue() {

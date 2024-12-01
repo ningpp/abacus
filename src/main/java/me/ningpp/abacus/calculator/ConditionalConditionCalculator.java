@@ -13,22 +13,21 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-package me.ningpp.abacus.translator;
+package me.ningpp.abacus.calculator;
 
-import me.ningpp.abacus.AbacusParser.LiteralContext;
 import me.ningpp.abacus.ExpressionDTO;
-import me.ningpp.abacus.ExpressionType;
-import org.antlr.v4.runtime.tree.ParseTree;
 
-public class StringLiteralTranslator implements Translator {
+import java.math.MathContext;
+import java.math.RoundingMode;
+import java.util.Map;
+
+import static me.ningpp.abacus.AbacusUtil.calculateOne;
+
+public class ConditionalConditionCalculator implements Calculator {
 
     @Override
-    public ExpressionDTO translate(ParseTree node) {
-        if (!(node instanceof LiteralContext literalCtx)) {
-            return null;
-        }
-        String text = literalCtx.StringLiteral().getText();
-        return new ExpressionDTO(text.substring(1, text.length()-1), ExpressionType.STRING_LITERAL);
+    public Object calculate(ExpressionDTO expr, Map<String, Object> context, int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
+        return calculateOne(expr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
     }
 
 }

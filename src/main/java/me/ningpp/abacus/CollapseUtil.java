@@ -60,12 +60,12 @@ public final class CollapseUtil {
         if (exp.getType() == ExpressionType.PARENTHESIS
                 && collapsedChildren.size() == 1) {
             if (collapsedChildren.get(0).getType() == ExpressionType.PARENTHESIS) {
-                return new ExpressionDTO(collapsedChildren.get(0).getText(), exp.getType(), collapsedChildren.get(0).getChildren());
+                return new ExpressionDTO(collapsedChildren.get(0).getCalculatedValue(), collapsedChildren.get(0).getText(), exp.getType(), collapsedChildren.get(0).getChildren());
             } else if (collapsedChildren.get(0).getType() == ExpressionType.VARIABLE
                         || collapsedChildren.get(0).getType() == ExpressionType.NUMBER) {
-                return new ExpressionDTO(collapsedChildren.get(0).getText(), collapsedChildren.get(0).getType(), collapsedChildren.get(0).getChildren());
+                return new ExpressionDTO(collapsedChildren.get(0).getCalculatedValue(), collapsedChildren.get(0).getText(), collapsedChildren.get(0).getType(), collapsedChildren.get(0).getChildren());
             }
         }
-        return new ExpressionDTO(exp.getText(), exp.getType(), collapsedChildren);
+        return new ExpressionDTO(exp.getCalculatedValue(), exp.getText(), exp.getType(), collapsedChildren);
     }
 }

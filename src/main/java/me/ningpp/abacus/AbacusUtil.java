@@ -15,37 +15,63 @@
  */
 package me.ningpp.abacus;
 
-import me.ningpp.abacus.exception.MethodNotFoundException;
-import me.ningpp.abacus.exception.SyntaxException;
-import me.ningpp.abacus.methods.AbacusMethod;
-import me.ningpp.abacus.methods.MaxMethod;
-import me.ningpp.abacus.methods.MinMethod;
-import me.ningpp.abacus.methods.StringContainsAnyMethod;
+import me.ningpp.abacus.calculator.AdditiveMultiplicativeCalculator;
+import me.ningpp.abacus.calculator.ArithmeticCalculator;
+import me.ningpp.abacus.calculator.Calculator;
+import me.ningpp.abacus.calculator.ConditionalAndCalculator;
+import me.ningpp.abacus.calculator.ConditionalCalculator;
+import me.ningpp.abacus.calculator.ConditionalConditionCalculator;
+import me.ningpp.abacus.calculator.ConditionalElseCalculator;
+import me.ningpp.abacus.calculator.ConditionalOrCalculator;
+import me.ningpp.abacus.calculator.ConditionalThenCalculator;
+import me.ningpp.abacus.calculator.EqualityCalculator;
+import me.ningpp.abacus.calculator.ExpressionCalculator;
+import me.ningpp.abacus.calculator.MethodInvocationCalculator;
+import me.ningpp.abacus.calculator.NumberCalculator;
+import me.ningpp.abacus.calculator.ParenthesisCalculator;
+import me.ningpp.abacus.calculator.PrimaryCalculator;
+import me.ningpp.abacus.calculator.RelationalCalculator;
+import me.ningpp.abacus.calculator.StringLiteralCalculator;
+import me.ningpp.abacus.calculator.SymbolCalculator;
+import me.ningpp.abacus.calculator.UnaryCalculator;
+import me.ningpp.abacus.calculator.VariableCalculator;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.apache.commons.collections4.CollectionUtils;
 
-import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 public final class AbacusUtil {
 
     private AbacusUtil() {
     }
 
-    private static final Map<String, AbacusMethod> METHODS = new HashMap<>();
+    private static final Calculator[] CALCULATORS = new Calculator[ExpressionType.values().length];
 
     static {
-        METHODS.put("max", new MaxMethod());
-        METHODS.put("min", new MinMethod());
-
-        METHODS.put("stringContainsAny", new StringContainsAnyMethod());
+        CALCULATORS[ExpressionType.ADDITIVE.ordinal()] = new AdditiveMultiplicativeCalculator();
+        CALCULATORS[ExpressionType.MULTIPLICATIVE.ordinal()] = new AdditiveMultiplicativeCalculator();
+        CALCULATORS[ExpressionType.ARITHMETIC.ordinal()] = new ArithmeticCalculator();
+        CALCULATORS[ExpressionType.CONDITIONAL_AND.ordinal()] = new ConditionalAndCalculator();
+        CALCULATORS[ExpressionType.CONDITIONAL.ordinal()] = new ConditionalCalculator();
+        CALCULATORS[ExpressionType.CONDITIONAL_CONDITION.ordinal()] = new ConditionalConditionCalculator();
+        CALCULATORS[ExpressionType.CONDITIONAL_ELSE.ordinal()] = new ConditionalElseCalculator();
+        CALCULATORS[ExpressionType.CONDITIONAL_OR.ordinal()] = new ConditionalOrCalculator();
+        CALCULATORS[ExpressionType.CONDITIONAL_THEN.ordinal()] = new ConditionalThenCalculator();
+        CALCULATORS[ExpressionType.EQUALITY.ordinal()] = new EqualityCalculator();
+        CALCULATORS[ExpressionType.EXPRESSION.ordinal()] = new ExpressionCalculator();
+        CALCULATORS[ExpressionType.METHOD_INVOCATION.ordinal()] = new MethodInvocationCalculator();
+        CALCULATORS[ExpressionType.NUMBER.ordinal()] = new NumberCalculator();
+        CALCULATORS[ExpressionType.PARENTHESIS.ordinal()] = new ParenthesisCalculator();
+        CALCULATORS[ExpressionType.PRIMARY.ordinal()] = new PrimaryCalculator();
+        CALCULATORS[ExpressionType.RELATIONAL.ordinal()] = new RelationalCalculator();
+        CALCULATORS[ExpressionType.STRING_LITERAL.ordinal()] = new StringLiteralCalculator();
+        CALCULATORS[ExpressionType.SYMBOL.ordinal()] = new SymbolCalculator();
+        CALCULATORS[ExpressionType.UNARY.ordinal()] = new UnaryCalculator();
+        CALCULATORS[ExpressionType.VARIABLE.ordinal()] = new VariableCalculator();
     }
 
     public static ExpressionResultDTO parse(String inputExpression) {
@@ -82,317 +108,30 @@ public final class AbacusUtil {
             return null;
         }
 
-        List<ExpressionDTO> horizontals = treeToHorizontal(exps);
-
-        while (hasNotCalculated(horizontals)) {
-            calculate(horizontals, context, defaultScale, defaultRoundingMode, mathContext);
-        }
-
-        ExpressionDTO root = new ExpressionDTO();
-        root.setType(ExpressionType.ADDITIVE);
-        root.setChildren(exps);
-        calculate(List.of(root), context, defaultScale, defaultRoundingMode, mathContext);
-        return root.getCalculatedValue();
-    }
-
-    private static Object calculateCondition(ExpressionDTO conditionExpr, Map<String, Object> context,
-            int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
-        if (conditionExpr.getType() == ExpressionType.RELATIONAL) {
-            return calculateRelational(conditionExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionExpr.getType() == ExpressionType.EQUALITY) {
-            return calculateEquality(conditionExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionExpr.getType() == ExpressionType.PARENTHESIS) {
-            if (CollectionUtils.isEmpty(conditionExpr.getChildren())) {
-                throw new SyntaxException("syntax error : " + conditionExpr.getText());
-            }
-            return calculateCondition(conditionExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionExpr.getType() == ExpressionType.METHOD_INVOCATION) {
-            calculate(List.of(conditionExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            return conditionExpr.getCalculatedValue();
-        }
-        return calculateConditionalOr(conditionExpr, context, defaultScale, defaultRoundingMode, mathContext);
-    }
-
-    private static boolean calculateRelational(ExpressionDTO relationalExpr, Map<String, Object> context,
-            int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
-        if (relationalExpr.getChildren().size() == 1) {
-            throw new IllegalStateException(relationalExpr.getText());
-        } else {
-            String symbol = relationalExpr.getChildren().get(1).getText();
-            ExpressionDTO leftExpr = relationalExpr.getChildren().get(0);
-            ExpressionDTO rightExpr = relationalExpr.getChildren().get(2);
-            calculate(List.of(leftExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            calculate(List.of(rightExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            Object left = leftExpr.getCalculatedValue();
-            Object right = rightExpr.getCalculatedValue();
-            if (left instanceof Comparable leftNumber && right instanceof Comparable rightNumber) {
-                int r = leftNumber.compareTo(rightNumber);
-                if ("<".equals(symbol)) {
-                    return r < 0;
-                } else if (">".equals(symbol)) {
-                    return r > 0;
-                } else if ("<=".equals(symbol)) {
-                    return r <= 0;
-                } else if (">=".equals(symbol)) {
-                    return r >= 0;
-                } else {
-                    throw new IllegalStateException(relationalExpr.getText());
-                }
-            } else {
-                throw new IllegalArgumentException("can't compare these two value, left " + left + ", right = " + right);
-            }
-        }
-    }
-
-    private static boolean calculateEquality(ExpressionDTO equalityAndExpr, Map<String, Object> context,
-            int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
-        if (equalityAndExpr.getChildren().size() == 1) {
-            return calculateRelational(equalityAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-        } else {
-            ExpressionDTO leftExpr = equalityAndExpr.getChildren().get(0);
-            ExpressionDTO rightExpr = equalityAndExpr.getChildren().get(2);
-            calculate(List.of(leftExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            calculate(List.of(rightExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            Object left = leftExpr.getCalculatedValue();
-            Object right = rightExpr.getCalculatedValue();
-            if ("==".equals(equalityAndExpr.getChildren().get(1).getText())) {
-                return Objects.equals(left, right);
-            } else {
-                return ! Objects.equals(left, right);
-            }
-        }
-    }
-
-    private static Object calculateConditionalAnd(ExpressionDTO conditionalAndExpr, Map<String, Object> context,
-            int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
-
-        if (conditionalAndExpr.getType() == ExpressionType.RELATIONAL) {
-            return calculateRelational(conditionalAndExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionalAndExpr.getType() == ExpressionType.EQUALITY) {
-            return calculateEquality(conditionalAndExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionalAndExpr.getType() == ExpressionType.PARENTHESIS) {
-            if (CollectionUtils.isEmpty(conditionalAndExpr.getChildren())) {
-                throw new SyntaxException("syntax error : " + conditionalAndExpr.getText());
-            }
-            return calculateCondition(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionalAndExpr.getType() == ExpressionType.METHOD_INVOCATION) {
-            calculate(List.of(conditionalAndExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            return conditionalAndExpr.getCalculatedValue();
-        }
-
-        if (conditionalAndExpr.getChildren().size() == 1) {
-            return calculateEquality(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-        } else {
-            Object left = calculateConditionalAnd(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-            Object right = calculateConditionalAnd(conditionalAndExpr.getChildren().get(2), context, defaultScale, defaultRoundingMode, mathContext);
-            if (left instanceof Boolean leftBoolean && right instanceof Boolean rightBoolean) {
-                return leftBoolean && rightBoolean;
-            }
-            throw new IllegalArgumentException("left or right value must be Boolean value, but left = " + left + ", right = " + right);
-        }
-    }
-
-    private static Object calculateConditionalOr(ExpressionDTO conditionalOrExpr, Map<String, Object> context,
-            int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
-        if (conditionalOrExpr.getType() == ExpressionType.EQUALITY) {
-            return calculateEquality(conditionalOrExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionalOrExpr.getType() == ExpressionType.CONDITIONAL_AND) {
-            return calculateConditionalAnd(conditionalOrExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionalOrExpr.getType() == ExpressionType.RELATIONAL) {
-            return calculateRelational(conditionalOrExpr, context, defaultScale, defaultRoundingMode, mathContext);
-        } else if (conditionalOrExpr.getType() == ExpressionType.METHOD_INVOCATION) {
-            calculate(List.of(conditionalOrExpr), context, defaultScale, defaultRoundingMode, mathContext);
-            return conditionalOrExpr.getCalculatedValue();
-        }
-
-        if (conditionalOrExpr.getChildren().size() == 1) {
-            return calculateConditionalAnd(conditionalOrExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-        } else {
-            Object left = calculateConditionalAnd(conditionalOrExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-            Object right = calculateConditionalOr(conditionalOrExpr.getChildren().get(2), context, defaultScale, defaultRoundingMode, mathContext);
-            if (left instanceof Boolean leftBoolean && right instanceof Boolean rightBoolean) {
-                return leftBoolean || rightBoolean;
-            }
-            throw new IllegalArgumentException("left or right value must be Boolean value, but left = " + left + ", right = " + right);
-        }
-    }
-
-    private static void calculate(List<ExpressionDTO> exps, Map<String, Object> context,
-            int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
         for (ExpressionDTO exp : exps) {
-            if (exp.isCalculated()) {
-                continue;
-            }
-
-            if (exp.getType() == ExpressionType.CONDITIONAL) {
-                Object conditionObject = calculateCondition(exp.getChildren().get(0), context, defaultScale, defaultRoundingMode, mathContext);
-                if (conditionObject instanceof Boolean condition) {
-                    if (condition) {
-                        // then expr
-                        ExpressionDTO thenExpr = exp.getChildren().get(1);
-                        calculate(List.of(thenExpr), context, defaultScale, defaultRoundingMode, mathContext);
-                        exp.setCalculatedValue(thenExpr.getCalculatedValue());
-                    } else {
-                        // else expr
-                        ExpressionDTO elseExpr = exp.getChildren().get(2);
-                        calculate(List.of(elseExpr), context, defaultScale, defaultRoundingMode, mathContext);
-                        exp.setCalculatedValue(elseExpr.getCalculatedValue());
-                    }
-                } else {
-                    throw new IllegalArgumentException("value must be Boolean value, but " + conditionObject + ", expression = " + exp.getText());
-                }
-                exp.setCalculated(true);
-                continue;
-            }
-
-            if (CollectionUtils.isNotEmpty(exp.getChildren())) {
-                calculate(exp.getChildren(), context, defaultScale, defaultRoundingMode, mathContext);
-
-                if (exp.getType() == ExpressionType.MULTIPLICATIVE || exp.getType() == ExpressionType.ADDITIVE) {
-                    Object result = exp.getChildren().get(0).getCalculatedValue();
-                    if (exp.getChildren().size() > 1) {
-                        String preSymbol = exp.getChildren().get(1).getText();
-                        for (int i = 2; i < exp.getChildren().size(); i++) {
-                            Object v = exp.getChildren().get(i).getCalculatedValue();
-                            if (v != null) {
-                                result = calculateNumber(result, preSymbol, v,
-                                        defaultScale, defaultRoundingMode, mathContext);
-                            }
-                            if (exp.getChildren().get(i).getType() == ExpressionType.SYMBOL) {
-                                preSymbol = exp.getChildren().get(i).getText();
-                            }
-                        }
-                    }
-
-                    exp.setCalculatedValue(result);
-                } else if (exp.getType() == ExpressionType.PARENTHESIS) {
-                    exp.setCalculatedValue(exp.getChildren().get(0).getCalculatedValue());
-                } else if (exp.getType() == ExpressionType.ARITHMETIC) {
-                    String preSymbol = exp.getChildren().get(0).getText();
-                    boolean additiveSymbol = "+".equals(preSymbol) || "-".equals(preSymbol);
-                    BigDecimal result = calculateNumber(additiveSymbol ? BigDecimal.ZERO : BigDecimal.ONE,
-                            preSymbol,
-                            exp.getChildren().get(1).getCalculatedValue(),
-                            defaultScale, defaultRoundingMode, mathContext);
-                    exp.setCalculatedValue(result);
-                } else if (exp.getType() == ExpressionType.METHOD_INVOCATION) {
-                    exp.setCalculatedValue(calculateAbacusMethod(exp));
-                }
-
-                exp.setCalculated(true);
-            } else {
-                if (exp.getType() == ExpressionType.NUMBER) {
-                    exp.setCalculatedValue(new BigDecimal(exp.getText()));
-                } else if (exp.getType() == ExpressionType.VARIABLE) {
-                    exp.setCalculatedValue(context.get(exp.getText()));
-                } else if (exp.getType() == ExpressionType.STRING_LITERAL) {
-                    exp.setCalculatedValue(exp.getText().substring(1, exp.getText().length()-1));
-                }
-                exp.setCalculated(true);
-            }
+            calculateOne(exp, context, defaultScale, defaultRoundingMode, mathContext);
         }
+
+        return exps.get(0).getCalculatedValue();
     }
 
-    private static Object calculateAbacusMethod(ExpressionDTO expr) {
-        String methodName = expr.getChildren().get(0).getText();
-        AbacusMethod abacusMethod = METHODS.get(methodName);
-        if (abacusMethod == null) {
-            throw new MethodNotFoundException("should register method before use it, method name is " + methodName);
-        }
-        Object[] args = null;
-        int childCount = expr.getChildren().size();
-        int argCount = expr.getChildren().size() - 1;
-        if (argCount > 0) {
-            args = new Object[argCount];
-            for (int i = 1; i < childCount; i++) {
-                args[i-1] = expr.getChildren().get(i).getCalculatedValue();
-            }
-        }
-        return abacusMethod.execute(args);
-    }
-
-    private static BigDecimal toDecimal(Object left) {
-        if (left instanceof BigDecimal r) {
-            return r;
-        } else if (left instanceof Number n) {
-            return new BigDecimal(n.toString());
-        } else if (left instanceof CharSequence c) {
-            return new BigDecimal(c.toString());
-        } else {
-            throw new IllegalArgumentException("illegal value, expect BigDecimal but " + left.getClass().getName());
-        }
-    }
-
-    private static BigDecimal calculateNumber(Object left, String preSymbol, Object right,
+    public static Object calculateOne(ExpressionDTO exp, Map<String, Object> context,
             int defaultScale, RoundingMode defaultRoundingMode, MathContext mathContext) {
-        if (left == null) {
-            throw new IllegalArgumentException("'left' value can't be null!");
-        }
-        if (right == null) {
-            throw new IllegalArgumentException("'right' value can't be null!");
+        Calculator calculator = CALCULATORS[exp.getType().ordinal()];
+        if (calculator == null) {
+            throw new IllegalStateException("no calulator for " + exp.getType());
         }
 
-        BigDecimal leftDecimal = toDecimal(left);
-        BigDecimal rightDecimal = toDecimal(right);
+        if (CollectionUtils.isNotEmpty(exp.getChildren())) {
+            for (ExpressionDTO child : exp.getChildren()) {
+                Object childCalculatedValue = calculateOne(child, context, defaultScale, defaultRoundingMode, mathContext);
+                child.setCalculatedValue(childCalculatedValue);
+            }
+        }
 
-        BigDecimal result;
-        if ("*".equals(preSymbol)) {
-            if (mathContext != null) {
-                result = leftDecimal.multiply(rightDecimal, mathContext);
-            } else {
-                result = leftDecimal.multiply(rightDecimal);
-            }
-        } else if ("/".equals(preSymbol)) {
-            if (mathContext != null) {
-                result = leftDecimal.divide(rightDecimal, mathContext);
-            } else {
-                result = leftDecimal.divide(rightDecimal, defaultScale, defaultRoundingMode);
-            }
-        } else if ("+".equals(preSymbol)) {
-            if (mathContext != null) {
-                result = leftDecimal.add(rightDecimal, mathContext);
-            } else {
-                result = leftDecimal.add(rightDecimal);
-            }
-        } else if ("-".equals(preSymbol)) {
-            if (mathContext != null) {
-                result = leftDecimal.subtract(rightDecimal, mathContext);
-            } else {
-                result = leftDecimal.subtract(rightDecimal);
-            }
-        } else {
-            throw new IllegalStateException("unsupport Symbol " + preSymbol);
-        }
-        return result;
-    }
-
-    private static boolean hasNotCalculated(List<ExpressionDTO> horizontals) {
-        for (ExpressionDTO exp : horizontals) {
-            if (! exp.isCalculated()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public static List<ExpressionDTO> treeToHorizontal(List<ExpressionDTO> list) {
-        if (list == null) {
-            return new ArrayList<>(0);
-        }
-        List<ExpressionDTO> temps = new ArrayList<>(64);
-        for (ExpressionDTO n : list) {
-            treeToList(temps, n);
-        }
-        return temps;
-    }
-
-    private static void treeToList(List<ExpressionDTO> list, ExpressionDTO n) {
-        list.add(n);
-        if (CollectionUtils.isNotEmpty(n.getChildren())) {
-            for (ExpressionDTO child : n.getChildren()) {
-                treeToList(list, child);
-            }
-        }
+        Object calculatedValue = calculator.calculate(exp, context, defaultScale, defaultRoundingMode, mathContext);
+        exp.setCalculatedValue(calculatedValue);
+        return calculatedValue;
     }
 
 }

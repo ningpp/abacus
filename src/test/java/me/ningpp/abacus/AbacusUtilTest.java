@@ -63,7 +63,7 @@ class AbacusUtilTest {
 
     private static final List<String> CONDITIONS = List.of("<", "<=", ">", ">=", "==", "!=");
 
-    @RepeatedTest(199)
+    @RepeatedTest(299)
     void randomCalculateTest() {
         Random random = new Random();
         int terms = random.nextInt(1, 32);
@@ -417,6 +417,11 @@ class AbacusUtilTest {
         expression = " ( (stringContainsAny(\"abcdef123456\", \"xyzxyz\")) ? 3.14 : 2.718 )";
         assertEquals(BigDecimal.valueOf(2.718), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
 
+    }
+
+    @Test
+    void simpleTest() {
+        assertEquals(BigDecimal.valueOf(3), AbacusUtil.calculate(AbacusUtil.parse("1+2"), Map.of(), 10, RoundingMode.HALF_UP));
     }
 
     @RepeatedTest(32)

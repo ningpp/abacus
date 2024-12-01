@@ -20,6 +20,8 @@ import me.ningpp.abacus.ExpressionDTO;
 import me.ningpp.abacus.ExpressionType;
 import org.antlr.v4.runtime.tree.ParseTree;
 
+import java.math.BigDecimal;
+
 public class ScientificTranslator implements Translator {
 
     @Override
@@ -30,7 +32,9 @@ public class ScientificTranslator implements Translator {
         String text = node.getText();
         int last = text.length() - 1;
         String numberStr = text.charAt(last) == 'B' ? text.substring(0, last) : text;
-        return new ExpressionDTO(numberStr, ExpressionType.NUMBER);
+        ExpressionDTO dto = new ExpressionDTO(numberStr, ExpressionType.NUMBER);
+        dto.setCalculatedValue(new BigDecimal(numberStr));
+        return dto;
     }
 
 }
