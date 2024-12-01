@@ -13,45 +13,21 @@
  *    See the License for the specific language governing permissions and
  *    limitations under the License.
  */
-package me.ningpp.abacus;
+package me.ningpp.abacus.translator;
 
-public enum ExpressionType {
+import me.ningpp.abacus.AbacusParser.LiteralContext;
+import me.ningpp.abacus.ExpressionDTO;
+import me.ningpp.abacus.ExpressionType;
+import org.antlr.v4.runtime.tree.ParseTree;
 
-    SYMBOL,
+public class StringLiteralTranslator implements Translator {
 
-    VARIABLE,
+    @Override
+    public ExpressionDTO translate(ParseTree node) {
+        if (!(node instanceof LiteralContext literalCtx)) {
+            return null;
+        }
+        return new ExpressionDTO(literalCtx.StringLiteral().getText(), ExpressionType.STRING_LITERAL);
+    }
 
-    NUMBER,
-
-    STRING_LITERAL,
-
-    PARENTHESIS,
-
-    ADDITIVE,
-
-    UNARY,
-
-    EXPRESSION,
-
-    METHOD_INVOCATION,
-
-    CONDITIONAL,
-
-    CONDITIONAL_CONDITION,
-    CONDITIONAL_THEN,
-    CONDITIONAL_ELSE,
-
-    CONDITIONAL_OR,
-
-    CONDITIONAL_AND,
-
-    EQUALITY,
-
-    RELATIONAL,
-
-    PRIMARY,
-
-    ARITHMETIC,
-
-    MULTIPLICATIVE
 }

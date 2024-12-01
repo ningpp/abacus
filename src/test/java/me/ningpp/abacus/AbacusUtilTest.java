@@ -15,8 +15,16 @@
  */
 package me.ningpp.abacus;
 
+import com.alibaba.qlexpress4.Express4Runner;
+import com.alibaba.qlexpress4.InitOptions;
+import com.alibaba.qlexpress4.QLOptions;
+import com.alibaba.qlexpress4.api.QLFunctionalVarargs;
 import com.ql.util.express.DefaultContext;
 import com.ql.util.express.ExpressRunner;
+import me.ningpp.abacus.methods.MaxMethod;
+import me.ningpp.abacus.methods.MinMethod;
+import me.ningpp.abacus.methods.StringContainsAnyMethod;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
@@ -25,6 +33,8 @@ import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Duration;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -61,7 +71,7 @@ class AbacusUtilTest {
             expressionParts.add(randomValue(random).toPlainString());
         }
 
-        String expression = generateRandomExpression(depth, 1, expressionParts, random);
+        String expression = generateRandomExpression(false, depth, 1, expressionParts, random);
         LOGGER.info("generateRandomExpression length:\t\t{}\t\t{}", expression.length(), expression);
         boolean resultEqual = false;
         Object abacusResult = null;
@@ -87,22 +97,77 @@ class AbacusUtilTest {
         assertTrue(resultEqual);
     }
 
-    private Pair<Object, Object> calculate(String expression, Map<String, Object> context) throws Exception {
+    private Pair<Object, Object> calculate(String expression, Map<String, Object> context) {
+        return calculate(expression, false, true, context);
+    }
+
+    private Pair<Object, Object> calculate(String expression, boolean useQl4, boolean useQl3, Map<String, Object> context) {
         int qlScale = 10;
         RoundingMode qlRoundingMode = RoundingMode.HALF_UP;
 
-        List<ExpressionDTO> exps = CollapseUtil.collapse(AbacusUtil.parse(expression).getExpressions());
+        LocalDateTime start = LocalDateTime.now();
+        ExpressionResultDTO prseResult = AbacusUtil.parse(expression);
+        LocalDateTime parseEnd = LocalDateTime.now();
+        List<ExpressionDTO> exps = CollapseUtil.collapse(prseResult.getExpressions());
         Object abacusResult = AbacusUtil.calculateCollapse(exps, context, qlScale, qlRoundingMode);
+        LOGGER.info("Abacus parse expression cost {}", Duration.between(start, parseEnd).toMillis());
+        LOGGER.info("Abacus calculate cost {}", Duration.between(parseEnd, LocalDateTime.now()).toMillis());
 
-        DefaultContext<String, Object> qlContext = new DefaultContext<>();
-        qlContext.putAll(context);
-        ExpressRunner runner = new ExpressRunner(true, false);
-        Object qlResult = runner.execute(expression, qlContext, null, true, false);
+        Object qlResult = null;
+        if (useQl4) {
+            Map<String, Object> qlContext = new LinkedHashMap<>(context);
+            Express4Runner runner = new Express4Runner(InitOptions.builder().build());
+            runner.addFunction("min", new QLMinMethod());
+            runner.addFunction("max", new QLMaxMethod());
+            runner.addFunction("stringContainsAny", new QLStringContainsAnyMethod());
+            start = LocalDateTime.now();
+            qlResult = runner.execute(expression, qlContext, QLOptions.builder().precise(true).build());
+            LOGGER.info("QLExpress4 parse and calculate cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
+        }
+        if (useQl3) {
+            try {
+                DefaultContext<String, Object> qlContext = new DefaultContext<>();
+                qlContext.putAll(context);
+                ExpressRunner runner = new ExpressRunner(true, false);
+                start = LocalDateTime.now();
+                qlResult = runner.execute(expression, qlContext, null, true, false);
+                LOGGER.info("QLExpress3 parse and calculate cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         return Pair.of(abacusResult, qlResult);
     }
 
-    private String generateRandomExpression(int depth, int currentDepth, List<String> parts, Random random) {
+    private static class QLMinMethod implements QLFunctionalVarargs {
+        private static final MinMethod METHOD = new MinMethod();
+
+        @Override
+        public Object call(Object[] args) {
+            return METHOD.execute(args);
+        }
+    }
+
+    private static class QLMaxMethod implements QLFunctionalVarargs {
+        private static final MaxMethod METHOD = new MaxMethod();
+
+        @Override
+        public Object call(Object[] args) {
+            return METHOD.execute(args);
+        }
+    }
+
+    private static class QLStringContainsAnyMethod implements QLFunctionalVarargs {
+        private static final StringContainsAnyMethod METHOD = new StringContainsAnyMethod();
+
+        @Override
+        public Object call(Object[] args) {
+            return METHOD.execute(args);
+        }
+    }
+
+    private String generateRandomExpression(boolean genStringContainsAny, int depth, int currentDepth, List<String> parts, Random random) {
         if (depth == 0) {
             List<String> expressionParts = new ArrayList<>(parts);
             Collections.shuffle(expressionParts);
@@ -129,7 +194,7 @@ class AbacusUtilTest {
             }
             List<String> params = new ArrayList<>(paramCount);
             for (int i = 0; i < paramCount; i++) {
-                params.add(generateRandomExpression(depth - 1, currentDepth + 1, parts, random));
+                params.add(generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random));
             }
             return String.format(Locale.ROOT,
                     " %s( %s ) ", methodName, String.join(", ", params));
@@ -145,8 +210,11 @@ class AbacusUtilTest {
             } else {
                 conditionExpr = randomSimpleCondition(random);
             }
-            String thenExpr = generateRandomExpression(depth - 1, currentDepth + 1, parts, random);
-            String elseExpr = generateRandomExpression(depth - 1, currentDepth + 1, parts, random);
+            if (genStringContainsAny && random.nextBoolean()) {
+                conditionExpr += (random.nextBoolean() ? " && " : " || ") + randomStringContainsAnyCondition(random);
+            }
+            String thenExpr = generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
+            String elseExpr = generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
             return String.format(Locale.ROOT,
                     " ( (%s) ? (%s) : ((%s)) ) ", conditionExpr, thenExpr, elseExpr);
         }
@@ -155,20 +223,20 @@ class AbacusUtilTest {
         if (wrapInParentheses) {
             boolean oneExp = random.nextInt(11) > 6;
             if (oneExp) {
-                return "(" + generateRandomExpression(depth - 1, currentDepth + 1, parts, random) + ")" +
+                return "(" + generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random) + ")" +
                         OPERATORS.get(random.nextInt(OPERATORS.size())) +
-                        generateRandomExpression(depth - 1, currentDepth + 1, parts, random);
+                        generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
             } else {
                 return "(" +
                         parts.get(random.nextInt(parts.size())) +
                         OPERATORS.get(random.nextInt(OPERATORS.size())) +
-                        generateRandomExpression(depth - 1, currentDepth + 1, parts, random) +
+                        generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random) +
                         ")";
             }
         } else {
             return parts.get(random.nextInt(parts.size())) +
                     OPERATORS.get(random.nextInt(OPERATORS.size())) +
-                    generateRandomExpression(depth, currentDepth + 1, parts, random);
+                    generateRandomExpression(genStringContainsAny, depth, currentDepth + 1, parts, random);
         }
     }
 
@@ -176,6 +244,16 @@ class AbacusUtilTest {
         return String.format(" %d %s %d ", random.nextInt(11),
                 CONDITIONS.get(random.nextInt(CONDITIONS.size())),
                 random.nextInt(11));
+    }
+
+    private String randomStringContainsAnyCondition(Random random) {
+        int size = random.nextInt(1, 6);
+        List<String> params = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            params.add(String.format(Locale.ROOT, "\"%s\"", RandomStringUtils.randomAlphanumeric(random.nextInt(1, 3))));
+        }
+        return String.format(" stringContainsAny(\"%s\", %s) ", RandomStringUtils.randomAlphanumeric(32),
+                String.join(", ", params));
     }
 
     private BigDecimal randomValue(Random random) {
@@ -186,7 +264,7 @@ class AbacusUtilTest {
     }
 
     @Test
-    void calculateTest() throws Exception {
+    void calculateTest() {
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("$1", BigDecimal.valueOf(1));
         context.put("$2", BigDecimal.valueOf(2));
@@ -196,20 +274,14 @@ class AbacusUtilTest {
 
         String expression = "(-1 * ($1 + $2 - $3 * $4)) / $5";
 
-        int qlScale = 10;
-        RoundingMode qlRoundingMode = RoundingMode.HALF_UP;
-
-        Object abacusResult = AbacusUtil.calculate(AbacusUtil.parse(expression), context, qlScale, qlRoundingMode);
-
-        DefaultContext<String, Object> qlContext = new DefaultContext<>();
-        qlContext.putAll(context);
-        ExpressRunner runner = new ExpressRunner(true, false);
-        Object qlResult = runner.execute(expression, qlContext, null, true, false);
+        Pair<Object, Object> pair = calculate(expression, context);
+        Object abacusResult = pair.getLeft();
+        Object qlResult = pair.getRight();
         assertEquals(qlResult, abacusResult);
     }
 
     @Test
-    void conditionalCalculateTest() throws Exception {
+    void conditionalCalculateTest() {
         List<String> expressions = List.of(
                 " $1 < $2 ? $3 / $4 : $4 / $3 ",
                 " ($1 < $2) ? $3 / $4 : $4 / $3 ",
@@ -243,7 +315,7 @@ class AbacusUtilTest {
     }
 
     @Test
-    void methodComplexTest() throws Exception {
+    void methodComplexTest() {
         String expression = " ( 1 + min(a, 1) ) < (b - 5)  ?  c * d :  ( f > g ? e * min(f, g) + max(f, g) : e / max(f, g) - min(f, g) ) ";
         for (int i = -1; i < 9; i++) {
             Map<String, Object> context = new LinkedHashMap<>();
@@ -266,7 +338,7 @@ class AbacusUtilTest {
     }
 
     @Test
-    void methodTest() throws Exception {
+    void methodTest() {
         List<String> expressions = List.of(
                 "max(1, 2)",
                 "max(1, max(2, 3))",
@@ -284,6 +356,43 @@ class AbacusUtilTest {
             }
             assertTrue(resultEqual);
         }
+    }
+
+    @Test
+    void stringLiteralTest() {
+        List<ExpressionDTO> piExprs = CollapseUtil.collapse(AbacusUtil.parse(" \"3.141592653\" ").getExpressions());
+        Object piResult = AbacusUtil.calculateCollapse(piExprs, Map.of(), 10, RoundingMode.HALF_UP);
+        assertEquals("3.141592653", piResult);
+
+        List<ExpressionDTO> abc26Exprs = CollapseUtil.collapse(AbacusUtil.parse(" \"abc26\" ").getExpressions());
+        Object abc26Result = AbacusUtil.calculateCollapse(abc26Exprs, Map.of(), 10, RoundingMode.HALF_UP);
+        assertEquals("abc26", abc26Result);
+
+        List<ExpressionDTO> exprs = CollapseUtil.collapse(AbacusUtil.parse(" \"中文汉字\" ").getExpressions());
+        Object result = AbacusUtil.calculateCollapse(exprs, Map.of(), 10, RoundingMode.HALF_UP);
+        assertEquals("中文汉字", result);
+    }
+
+    @Test
+    void stringContainsAnyTest() {
+        String expression = " stringContainsAny(\"abcdef123456\", \"xyz\", \"xyzxyz\", \"xyzxyzxyz\", \"def123\") ? 3.14 : 2.718 ";
+        assertEquals(BigDecimal.valueOf(3.14), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
+
+        expression = " stringContainsAny(\"abcdef123456\", \"xyz\", \"xyzxyz\", \"xyzxyzxyz\") ? 3.14 : 2.718 ";
+        assertEquals(BigDecimal.valueOf(2.718), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
+
+        expression = " stringContainsAny(\"abcdef123456\", \"xyz\", \"def123\") ? 3.14 : 2.718 ";
+        assertEquals(BigDecimal.valueOf(3.14), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
+
+        expression = " stringContainsAny(\"abcdef123456\", \"xyz\", \"xyzxyz\") ? 3.14 : 2.718 ";
+        assertEquals(BigDecimal.valueOf(2.718), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
+
+        expression = " stringContainsAny(\"abcdef123456\", \"def123\") ? 3.14 : 2.718 ";
+        assertEquals(BigDecimal.valueOf(3.14), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
+
+        expression = " ( (stringContainsAny(\"abcdef123456\", \"xyzxyz\")) ? 3.14 : 2.718 )";
+        assertEquals(BigDecimal.valueOf(2.718), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
+
     }
 
 }

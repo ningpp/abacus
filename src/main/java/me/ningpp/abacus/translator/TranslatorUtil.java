@@ -38,6 +38,7 @@ public final class TranslatorUtil {
         TRANSLATORS.add(new TerminalNodeImplTranslator());
         TRANSLATORS.add(new ScientificTranslator());
         TRANSLATORS.add(new VariableTranslator());
+        TRANSLATORS.add(new StringLiteralTranslator());
         TRANSLATORS.add(new MultiplicativeTranslator());
         TRANSLATORS.add(new AdditiveTranslator());
         TRANSLATORS.add(new UnaryTranslator());
@@ -86,6 +87,7 @@ public final class TranslatorUtil {
     }
 
     private static final Set<ExpressionType> ROOT_EXPRESSION_TYPES = new HashSet<>(Arrays.asList(
+            ExpressionType.STRING_LITERAL,
             ExpressionType.METHOD_INVOCATION,
             ExpressionType.CONDITIONAL,
             ExpressionType.CONDITIONAL_CONDITION,

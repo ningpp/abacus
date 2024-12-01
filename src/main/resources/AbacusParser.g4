@@ -27,6 +27,11 @@ primaryExpression
     | variable
     | parenthesisExpression
     | invocationExpression
+    | literal
+    ;
+
+literal
+    : StringLiteral
     ;
 
 parenthesisExpression

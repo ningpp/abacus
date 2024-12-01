@@ -20,6 +20,7 @@ import me.ningpp.abacus.exception.SyntaxException;
 import me.ningpp.abacus.methods.AbacusMethod;
 import me.ningpp.abacus.methods.MaxMethod;
 import me.ningpp.abacus.methods.MinMethod;
+import me.ningpp.abacus.methods.StringContainsAnyMethod;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.apache.commons.collections4.CollectionUtils;
@@ -42,6 +43,8 @@ public final class AbacusUtil {
     static {
         METHODS.put("max", new MaxMethod());
         METHODS.put("min", new MinMethod());
+
+        METHODS.put("stringContainsAny", new StringContainsAnyMethod());
     }
 
     public static ExpressionResultDTO parse(String inputExpression) {
@@ -92,6 +95,9 @@ public final class AbacusUtil {
                 throw new SyntaxException("syntax error : " + conditionExpr.getText());
             }
             return calculateCondition(conditionExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
+        } else if (conditionExpr.getType() == ExpressionType.METHOD_INVOCATION) {
+            calculate(List.of(conditionExpr), context, defaultScale, defaultRoundingMode);
+            return conditionExpr.getCalculatedValue();
         }
         return calculateConditionalOr(conditionExpr, context, defaultScale, defaultRoundingMode);
     }
@@ -158,6 +164,9 @@ public final class AbacusUtil {
                 throw new SyntaxException("syntax error : " + conditionalAndExpr.getText());
             }
             return calculateCondition(conditionalAndExpr.getChildren().get(0), context, defaultScale, defaultRoundingMode);
+        } else if (conditionalAndExpr.getType() == ExpressionType.METHOD_INVOCATION) {
+            calculate(List.of(conditionalAndExpr), context, defaultScale, defaultRoundingMode);
+            return conditionalAndExpr.getCalculatedValue();
         }
 
         if (conditionalAndExpr.getChildren().size() == 1) {
@@ -180,6 +189,9 @@ public final class AbacusUtil {
             return calculateConditionalAnd(conditionalOrExpr, context, defaultScale, defaultRoundingMode);
         } else if (conditionalOrExpr.getType() == ExpressionType.RELATIONAL) {
             return calculateRelational(conditionalOrExpr, context, defaultScale, defaultRoundingMode);
+        } else if (conditionalOrExpr.getType() == ExpressionType.METHOD_INVOCATION) {
+            calculate(List.of(conditionalOrExpr), context, defaultScale, defaultRoundingMode);
+            return conditionalOrExpr.getCalculatedValue();
         }
 
         if (conditionalOrExpr.getChildren().size() == 1) {
@@ -253,21 +265,7 @@ public final class AbacusUtil {
                             defaultScale, defaultRoundingMode);
                     exp.setCalculatedValue(result);
                 } else if (exp.getType() == ExpressionType.METHOD_INVOCATION) {
-                    String methodName = exp.getChildren().get(0).getText();
-                    AbacusMethod abacusMethod = METHODS.get(methodName);
-                    if (abacusMethod == null) {
-                        throw new MethodNotFoundException("should register method before use it, method name is " + methodName);
-                    }
-                    Object[] args = null;
-                    int childCount = exp.getChildren().size();
-                    int argCount = exp.getChildren().size() - 1;
-                    if (argCount > 0) {
-                        args = new Object[argCount];
-                        for (int i = 1; i < childCount; i++) {
-                            args[i-1] = exp.getChildren().get(i).getCalculatedValue();
-                        }
-                    }
-                    exp.setCalculatedValue(abacusMethod.execute(args));
+                    exp.setCalculatedValue(calculateAbacusMethod(exp));
                 }
 
                 exp.setCalculated(true);
@@ -276,10 +274,30 @@ public final class AbacusUtil {
                     exp.setCalculatedValue(new BigDecimal(exp.getText()));
                 } else if (exp.getType() == ExpressionType.VARIABLE) {
                     exp.setCalculatedValue(context.get(exp.getText()));
+                } else if (exp.getType() == ExpressionType.STRING_LITERAL) {
+                    exp.setCalculatedValue(exp.getText().substring(1, exp.getText().length()-1));
                 }
                 exp.setCalculated(true);
             }
         }
+    }
+
+    private static Object calculateAbacusMethod(ExpressionDTO expr) {
+        String methodName = expr.getChildren().get(0).getText();
+        AbacusMethod abacusMethod = METHODS.get(methodName);
+        if (abacusMethod == null) {
+            throw new MethodNotFoundException("should register method before use it, method name is " + methodName);
+        }
+        Object[] args = null;
+        int childCount = expr.getChildren().size();
+        int argCount = expr.getChildren().size() - 1;
+        if (argCount > 0) {
+            args = new Object[argCount];
+            for (int i = 1; i < childCount; i++) {
+                args[i-1] = expr.getChildren().get(i).getCalculatedValue();
+            }
+        }
+        return abacusMethod.execute(args);
     }
 
     private static BigDecimal toDecimal(Object left) {

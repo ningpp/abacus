@@ -43,6 +43,33 @@ fragment NUMBER
     ;
 
 
+StringLiteral: '"' StringCharacters? '"';
+
+fragment StringCharacters: StringCharacter+;
+
+fragment StringCharacter: ~["\\\r\n] | EscapeSequence;
+
+fragment EscapeSequence:
+    '\\' [btnfr"'\\]
+    | OctalEscape
+    | UnicodeEscape // This is not in the spec but prevents having to preprocess the input
+;
+
+fragment OctalEscape:
+    '\\' OctalDigit
+    | '\\' OctalDigit OctalDigit
+    | '\\' ZeroToThree OctalDigit OctalDigit
+;
+
+fragment ZeroToThree: [0-3];
+
+fragment HexDigit: [0-9a-fA-F];
+
+fragment OctalDigit: [0-7];
+
+fragment UnicodeEscape: '\\' 'u'+ HexDigit HexDigit HexDigit HexDigit;
+
+
 /*
 fragment
 JavaLetter
