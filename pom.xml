@@ -92,6 +92,7 @@
         <maven-resources-plugin.version>3.3.1</maven-resources-plugin.version>
         <maven-source-plugin.version>3.3.1</maven-source-plugin.version>
         <maven-surefire-plugin.version>3.5.2</maven-surefire-plugin.version>
+        <mvel.version>2.5.2.Final</mvel.version>
         <nexus-staging-maven-plugin.version>1.7.0</nexus-staging-maven-plugin.version>
         <ql-express3.version>3.3.4</ql-express3.version>
         <ql-express4.version>4.0.0-beta</ql-express4.version>
@@ -173,6 +174,12 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-slf4j2-impl</artifactId>
             <version>${log4j.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mvel</groupId>
+            <artifactId>mvel2</artifactId>
+            <version>${mvel.version}</version>
             <scope>test</scope>
         </dependency>
         <dependency>

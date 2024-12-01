@@ -27,7 +27,10 @@ public class ScientificTranslator implements Translator {
         if (! (node instanceof ScientificContext)) {
             return null;
         }
-        return new ExpressionDTO(node.getText(), ExpressionType.NUMBER);
+        String text = node.getText();
+        int last = text.length() - 1;
+        String numberStr = text.charAt(last) == 'B' ? text.substring(0, last) : text;
+        return new ExpressionDTO(numberStr, ExpressionType.NUMBER);
     }
 
 }

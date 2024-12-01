@@ -35,7 +35,7 @@ COLON:                    ':';
 VARIABLE: IdentifierStart IdentifierPart*;
 
 SCIENTIFIC_NUMBER
-    : NUMBER
+    : NUMBER 'B'?
     ;
 
 fragment NUMBER

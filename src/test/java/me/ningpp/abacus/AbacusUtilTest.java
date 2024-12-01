@@ -32,10 +32,13 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.tuple.Triple;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.mvel2.MVEL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Serializable;
 import java.math.BigDecimal;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -51,6 +54,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class AbacusUtilTest {
+
+    private static final double NANOS_PER_MILLI = 1000000;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AbacusUtilTest.class);
 
@@ -75,7 +80,7 @@ class AbacusUtilTest {
             expressionParts.add(randomValue(random).toPlainString());
         }
 
-        String expression = generateRandomExpression(false, depth, 1, expressionParts, random);
+        String expression = generateRandomExpression(true, true, false, depth, 1, expressionParts, random);
         LOGGER.info("generateRandomExpression length:\t\t{}\t\t{}", expression.length(), expression);
         boolean resultEqual = false;
         Object abacusResult = null;
@@ -186,7 +191,7 @@ class AbacusUtilTest {
         }
     }
 
-    private String generateRandomExpression(boolean genStringContainsAny, int depth, int currentDepth, List<String> parts, Random random) {
+    private String generateRandomExpression(boolean genConditional, boolean genMinMaxMethod, boolean genStringContainsAny, int depth, int currentDepth, List<String> parts, Random random) {
         if (depth == 0) {
             List<String> expressionParts = new ArrayList<>(parts);
             Collections.shuffle(expressionParts);
@@ -203,7 +208,7 @@ class AbacusUtilTest {
         }
 
         boolean useMethodInvocation = random.nextInt(101) < 8;
-        if (useMethodInvocation) {
+        if (genMinMaxMethod && useMethodInvocation) {
             int paramCount = 2 + random.nextInt(0, 3);
             String methodName;
             if (random.nextBoolean()) {
@@ -213,14 +218,14 @@ class AbacusUtilTest {
             }
             List<String> params = new ArrayList<>(paramCount);
             for (int i = 0; i < paramCount; i++) {
-                params.add(generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random));
+                params.add(generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth - 1, currentDepth + 1, parts, random));
             }
             return String.format(Locale.ROOT,
                     " %s( %s ) ", methodName, String.join(", ", params));
         }
 
         boolean useConditional = random.nextInt(101) < 8;
-        if (useConditional) {
+        if (genConditional && useConditional) {
             String conditionExpr;
             if (random.nextBoolean()) {
                 String format = random.nextBoolean() ? " %s && %s " : " %s || %s ";
@@ -232,8 +237,8 @@ class AbacusUtilTest {
             if (genStringContainsAny && random.nextBoolean()) {
                 conditionExpr += (random.nextBoolean() ? " && " : " || ") + randomStringContainsAnyCondition(random);
             }
-            String thenExpr = generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
-            String elseExpr = generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
+            String thenExpr = generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
+            String elseExpr = generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
             return String.format(Locale.ROOT,
                     " ( (%s) ? (%s) : ((%s)) ) ", conditionExpr, thenExpr, elseExpr);
         }
@@ -242,20 +247,20 @@ class AbacusUtilTest {
         if (wrapInParentheses) {
             boolean oneExp = random.nextInt(11) > 6;
             if (oneExp) {
-                return "(" + generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random) + ")" +
+                return "(" + generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth - 1, currentDepth + 1, parts, random) + ")" +
                         OPERATORS.get(random.nextInt(OPERATORS.size())) +
-                        generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
+                        generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth - 1, currentDepth + 1, parts, random);
             } else {
                 return "(" +
                         parts.get(random.nextInt(parts.size())) +
                         OPERATORS.get(random.nextInt(OPERATORS.size())) +
-                        generateRandomExpression(genStringContainsAny, depth - 1, currentDepth + 1, parts, random) +
+                        generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth - 1, currentDepth + 1, parts, random) +
                         ")";
             }
         } else {
             return parts.get(random.nextInt(parts.size())) +
                     OPERATORS.get(random.nextInt(OPERATORS.size())) +
-                    generateRandomExpression(genStringContainsAny, depth, currentDepth + 1, parts, random);
+                    generateRandomExpression(genConditional, genMinMaxMethod, genStringContainsAny, depth, currentDepth + 1, parts, random);
         }
     }
 
@@ -412,6 +417,41 @@ class AbacusUtilTest {
         expression = " ( (stringContainsAny(\"abcdef123456\", \"xyzxyz\")) ? 3.14 : 2.718 )";
         assertEquals(BigDecimal.valueOf(2.718), AbacusUtil.calculate(AbacusUtil.parse(expression), Map.of(), 10, RoundingMode.HALF_UP));
 
+    }
+
+    @RepeatedTest(32)
+    void abacusMvelTest() {
+
+        Random random = new Random();
+        int terms = random.nextInt(32, 53);
+        int depth = random.nextInt(1, 8);
+
+        Map<String, Object> context = new LinkedHashMap<>();
+        List<String> expressionParts = new ArrayList<>();
+        for (int i = 0; i < terms; i++) {
+            expressionParts.add(BigDecimal.valueOf(random.nextDouble()).multiply(BigDecimal.valueOf(31)).toPlainString() + "B");
+        }
+
+        String expression = generateRandomExpression(false, false, false, depth, 1, expressionParts, random);
+        LOGGER.info("abacusMvelExpr length:\t\t{}\t\t{}", expression.length(), expression);
+
+        LocalDateTime start = LocalDateTime.now();
+        ExpressionResultDTO prseResult = AbacusUtil.parse(expression);
+        LocalDateTime parseEnd = LocalDateTime.now();
+        List<ExpressionDTO> exps = CollapseUtil.collapse(prseResult.getExpressions());
+        Object abacusResult = AbacusUtil.calculateCollapse(exps, context, MathContext.DECIMAL128.getPrecision(),
+                MathContext.DECIMAL128.getRoundingMode(), MathContext.DECIMAL128);
+        LOGGER.info("Abacus parse expression cost {}", Duration.between(start, parseEnd).toNanos() / NANOS_PER_MILLI);
+        LOGGER.info("Abacus calculate cost {}", Duration.between(parseEnd, LocalDateTime.now()).toNanos() / NANOS_PER_MILLI);
+
+        start = LocalDateTime.now();
+        Serializable mvelCompiledExpr = MVEL.compileExpression(expression);
+        parseEnd = LocalDateTime.now();
+        Object mvelResult = MVEL.executeExpression(mvelCompiledExpr, context);
+        LOGGER.info("MVEL parse expression cost {}", Duration.between(start, parseEnd).toNanos() / NANOS_PER_MILLI);
+        LOGGER.info("MVEL calculate cost {}", Duration.between(parseEnd, LocalDateTime.now()).toNanos()/ NANOS_PER_MILLI);
+
+        assertEquals(abacusResult, mvelResult);
     }
 
 }
