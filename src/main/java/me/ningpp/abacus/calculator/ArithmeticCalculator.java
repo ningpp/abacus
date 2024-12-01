@@ -83,12 +83,7 @@ public class ArithmeticCalculator implements Calculator {
         } else if (left instanceof Number n) {
             return new BigDecimal(n.toString());
         } else if (left instanceof CharSequence c) {
-            try {
-                return new BigDecimal(c.toString());
-            } catch (Exception e) {
-                System.out.println(left);
-                throw new RuntimeException(e);
-            }
+            return new BigDecimal(c.toString());
         } else {
             throw new IllegalArgumentException("illegal value, expect BigDecimal but " + left.getClass().getName());
         }
