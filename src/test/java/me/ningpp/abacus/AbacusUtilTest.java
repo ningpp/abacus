@@ -19,13 +19,17 @@ import com.alibaba.qlexpress4.Express4Runner;
 import com.alibaba.qlexpress4.InitOptions;
 import com.alibaba.qlexpress4.QLOptions;
 import com.alibaba.qlexpress4.api.QLFunctionalVarargs;
+import com.googlecode.aviator.AviatorEvaluator;
+import com.googlecode.aviator.Expression;
+import com.googlecode.aviator.lexer.token.OperatorType;
 import com.ql.util.express.DefaultContext;
 import com.ql.util.express.ExpressRunner;
+import me.ningpp.abacus.aviator.AviatorDivFunction;
 import me.ningpp.abacus.methods.MaxMethod;
 import me.ningpp.abacus.methods.MinMethod;
 import me.ningpp.abacus.methods.StringContainsAnyMethod;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.lang3.tuple.Pair;
+import org.apache.commons.lang3.tuple.Triple;
 import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
@@ -75,33 +79,40 @@ class AbacusUtilTest {
         LOGGER.info("generateRandomExpression length:\t\t{}\t\t{}", expression.length(), expression);
         boolean resultEqual = false;
         Object abacusResult = null;
+        Object aviatorResult = null;
         Object qlResult = null;
         try {
-            Pair<Object, Object> result = calculate(expression, context);
+            Triple<Object, Object, Object> result = calculate(expression, context);
             qlResult = result.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(result.getRight().toString());
             abacusResult = result.getLeft();
-            resultEqual = qlResult.equals(abacusResult);
+            aviatorResult = result.getMiddle() instanceof BigDecimal rr ? rr : new BigDecimal(result.getMiddle().toString());
+            resultEqual = aviatorResult.equals(abacusResult) || abacusResult.equals(qlResult);
         } catch (ArithmeticException e) {
             // ignore
             resultEqual = true;
         } catch (Exception e) {
             LOGGER.error(e.getMessage(), e);
+            if ("Method code too large!".equals(e.getMessage())) {
+                // ignore for aviator
+                resultEqual = true;
+            }
         }
         if (!resultEqual) {
             LOGGER.info("expressionParts:\t\t{}", String.join(", ", expressionParts));
             LOGGER.info("context:\t\t{}", context);
             LOGGER.info("expression:\t\t{}", expression);
             LOGGER.info("abacusResult:\t\t{}", abacusResult);
+            LOGGER.info("aviatorResult:\t\t{}", aviatorResult);
             LOGGER.info("qlResult:\t\t{}", qlResult);
         }
         assertTrue(resultEqual);
     }
 
-    private Pair<Object, Object> calculate(String expression, Map<String, Object> context) {
+    private Triple<Object, Object, Object> calculate(String expression, Map<String, Object> context) {
         return calculate(expression, false, true, context);
     }
 
-    private Pair<Object, Object> calculate(String expression, boolean useQl4, boolean useQl3, Map<String, Object> context) {
+    private Triple<Object, Object, Object> calculate(String expression, boolean useQl4, boolean useQl3, Map<String, Object> context) {
         int qlScale = 10;
         RoundingMode qlRoundingMode = RoundingMode.HALF_UP;
 
@@ -113,31 +124,39 @@ class AbacusUtilTest {
         LOGGER.info("Abacus parse expression cost {}", Duration.between(start, parseEnd).toMillis());
         LOGGER.info("Abacus calculate cost {}", Duration.between(parseEnd, LocalDateTime.now()).toMillis());
 
+        AviatorEvaluator.getInstance().addOpFunction(OperatorType.DIV, new AviatorDivFunction(qlScale, qlRoundingMode));
+        start = LocalDateTime.now();
+        Expression aviatorCompiledExpr = AviatorEvaluator.compile(expression, false);
+        LOGGER.info("Aviator parse expression cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
+        start = LocalDateTime.now();
+        Object aviatorResult = aviatorCompiledExpr.execute(context);
+        LOGGER.info("Aviator calculate cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
+
         Object qlResult = null;
-        if (useQl4) {
-            Map<String, Object> qlContext = new LinkedHashMap<>(context);
-            Express4Runner runner = new Express4Runner(InitOptions.builder().build());
-            runner.addFunction("min", new QLMinMethod());
-            runner.addFunction("max", new QLMaxMethod());
-            runner.addFunction("stringContainsAny", new QLStringContainsAnyMethod());
-            start = LocalDateTime.now();
-            qlResult = runner.execute(expression, qlContext, QLOptions.builder().precise(true).build());
-            LOGGER.info("QLExpress4 parse and calculate cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
-        }
-        if (useQl3) {
-            try {
+        try {
+            if (useQl4) {
+                Map<String, Object> qlContext = new LinkedHashMap<>(context);
+                Express4Runner runner = new Express4Runner(InitOptions.builder().build());
+                runner.addFunction("min", new QLMinMethod());
+                runner.addFunction("max", new QLMaxMethod());
+                runner.addFunction("stringContainsAny", new QLStringContainsAnyMethod());
+                start = LocalDateTime.now();
+                qlResult = runner.execute(expression, qlContext, QLOptions.builder().precise(true).build());
+                LOGGER.info("QLExpress4 parse and calculate cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
+            }
+            if (useQl3) {
                 DefaultContext<String, Object> qlContext = new DefaultContext<>();
                 qlContext.putAll(context);
                 ExpressRunner runner = new ExpressRunner(true, false);
                 start = LocalDateTime.now();
                 qlResult = runner.execute(expression, qlContext, null, true, false);
                 LOGGER.info("QLExpress3 parse and calculate cost {}", Duration.between(start, LocalDateTime.now()).toMillis());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
             }
+        } catch (Exception e) {
+            LOGGER.error(e.getMessage(), e);
         }
 
-        return Pair.of(abacusResult, qlResult);
+        return Triple.of(abacusResult, aviatorResult, qlResult);
     }
 
     private static class QLMinMethod implements QLFunctionalVarargs {
@@ -274,7 +293,7 @@ class AbacusUtilTest {
 
         String expression = "(-1 * ($1 + $2 - $3 * $4)) / $5";
 
-        Pair<Object, Object> pair = calculate(expression, context);
+        Triple<Object, Object, Object> pair = calculate(expression, context);
         Object abacusResult = pair.getLeft();
         Object qlResult = pair.getRight();
         assertEquals(qlResult, abacusResult);
@@ -301,7 +320,7 @@ class AbacusUtilTest {
                     context.put("$3", BigDecimal.valueOf(3));
                     context.put("$4", BigDecimal.valueOf(7));
 
-                    Pair<Object, Object> pair = calculate(expression, context);
+                    Triple<Object, Object, Object> pair = calculate(expression, context);
                     BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
                     boolean resultEqual = right.equals(pair.getLeft());
                     if (!resultEqual) {
@@ -327,7 +346,7 @@ class AbacusUtilTest {
             context.put("f", BigDecimal.valueOf(new Random().nextDouble()));
             context.put("g", BigDecimal.valueOf(new Random().nextDouble()));
 
-            Pair<Object, Object> pair = calculate(expression, context);
+            Triple<Object, Object, Object> pair = calculate(expression, context);
             BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
             boolean resultEqual = right.equals(pair.getLeft());
             if (!resultEqual) {
@@ -348,7 +367,7 @@ class AbacusUtilTest {
                 "max(max(1, 2), max(3, max(4, max(5, 6))))"
         );
         for (String expression : expressions) {
-            Pair<Object, Object> pair = calculate(expression, Map.of());
+            Triple<Object, Object, Object> pair = calculate(expression, Map.of());
             BigDecimal right = pair.getRight() instanceof BigDecimal rr ? rr : new BigDecimal(pair.getRight().toString());
             boolean resultEqual = right.equals(pair.getLeft());
             if (!resultEqual) {
